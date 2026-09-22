@@ -1,0 +1,20 @@
+{
+  "name": "real-i-backend",
+  "private": true,
+  "workspaces": [
+    "services/*"
+  ],
+  "scripts": {
+    "test:core": "npm --workspace @real-i/core-api test",
+    "test:web": "node --test apps/web/tests/*.test.js",
+    "test": "npm run test:core && npm run test:web",
+    "start:core": "npm --workspace @real-i/core-api start",
+    "start:local": "node scripts/start-local.mjs"
+  },
+  "devDependencies": {
+    "mongodb-memory-server": "^11.2.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

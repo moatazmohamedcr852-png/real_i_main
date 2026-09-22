@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://real-i.vercel.app/sitemap.xml
