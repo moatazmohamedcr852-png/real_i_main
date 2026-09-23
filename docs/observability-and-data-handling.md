@@ -1,25 +1,40 @@
 # Observability and sensitive-data handling
 
-This policy applies to every REAL_i service boundary, including Core API → AI service and AI service → model-provider calls.
+One process, one boundary: `backend/` serves the API and the static frontend. Everything below is the policy this project should follow; the **current state** section records where it does not yet.
 
-## Required trace fields
+## Current state
 
-Each inbound request receives an `x-request-id`. Internal HTTP clients must forward it as `x-request-id`; logs must include it, the service name, route or operation, outcome, latency, and a non-content resource identifier when available. Do not use learner names or emails as correlation fields.
+| Concern | Reality today |
+| --- | --- |
+| Request logging | `morgan('dev')` in `server.js:31` — plain text, human-oriented |
+| Correlation IDs | None. No `x-request-id` is generated, forwarded, or logged |
+| Error logging | `errorHandler.js:11` passes the **raw error object** to `console.error` |
+| Structured logging | None — no logger abstraction, no JSON output, no redaction layer |
+| Metrics | None; `GET /health` and `GET /v1/admin/health` are the only liveness signals |
+
+Two concrete consequences to fix first:
+
+1. **`morgan` logs full request URLs including query strings.** Any credential passed as a query parameter is written to stdout. Keep tokens in headers and bodies; treat query-string secrets as prohibited.
+2. **`console.error(..., err)` prints stack traces and any message a driver attached.** A Postgres error can carry parameter values, and Groq SDK errors are already echoed into stored chat replies (see [ai-tutor.md](ai-tutor.md)). Log `err.name` and `err.code`, not the object.
+
+## Required trace fields (target)
+
+Each inbound request should receive an `x-request-id`, echoed on the response and included with every log line for that request: service name, route or operation, outcome, latency, and a non-content resource identifier. Correlate on opaque IDs — never on learner names or emails.
 
 ## Never log
 
-- Credentials and secrets: passwords, password hashes, bearer tokens, cookies, refresh-token hashes, MongoDB URIs, service credentials, provider API keys, or tokenized Jitsi claims.
-- Educational content: prompts, chat messages, retrieved passages, lesson/course content, calendar-event descriptions, assessment questions and answer keys, assignment/exam answers, auto-saved assessment responses, essay responses, rubric feedback, poll free-text responses (`PollResponses.responseText`), AI-guideline content, uploaded document contents, or unredacted model output.
-- Direct learner profile data: names, emails, and contact details.
-
-Structured loggers must redact the named fields in `services/core-api/src/shared/logger.js` (and equivalent fields in the AI service). Redaction is defense in depth, not authorization to attach sensitive payloads to logs.
+- **Credentials and secrets:** passwords, password hashes, access or refresh tokens, cookies, refresh-token hashes, `DATABASE_URL`, JWT secrets, `GROQ_API_KEY`, or tokenized Jitsi claims.
+- **Educational content:** chat messages and prompts, lesson and course text, assessment questions and answer keys, submitted answers, essay responses, grading feedback, poll free text (`poll_responses.response_text`), AI-guideline content, uploaded document contents, or unredacted model output.
+- **Learner profile data:** names, emails, contact details.
 
 ## Permitted operational metadata
 
-Request/correlation IDs, opaque database IDs where access is controlled, agent name, model identifier, status code, error class/code, retry count, token *counts* (not tokens), chunk count, and latency may be logged. Error logs must contain safe reproduction context without request bodies or model content.
+Request and correlation IDs, opaque database UUIDs, model identifier, status code, error class or code, retry count, token *counts* (never tokens), and latency. Error logs must contain enough to reproduce a class of failure without carrying request bodies or model content.
 
-## Boundary rules
+## Where content legitimately lives
 
-Only Core API exposes public endpoints. The AI service accepts authenticated internal requests, forwards the correlation ID, and logs metadata only. All services must use the same policy; a policy change requires changes to both service logger configurations and tests.
+`chat_messages.content`, `submissions.responses`, `poll_responses.response_text`, and `assessments.questions` are stored in PostgreSQL because the product requires them. That is application data under access control — not a licence to repeat it in logs. `notifications.payload` holds identifiers only, never feedback or assessment text.
 
-For the AI service, Core API forwards `x-request-id` on every internal call and the service requires it before processing. The AI service forwards the same ID to the configured model provider. Its JSON logger is allow-list based: it emits only operational IDs, operation/outcome, latency, provider/model, safe error class/code, and counts. It never passes raw `Error`/exception payloads, material, prompts, learner messages, guideline content, or model responses into a log record.
+## Deployment note
+
+Stdout logging behind `morgan` is adequate for local development. Before a real deployment, move to a JSON logger with an explicit allow-list of emitted fields — allow-listing, not deny-listing, so a newly added sensitive field cannot leak by being forgotten. Until that exists, do not pipe this server's stdout into a third-party log aggregation service.

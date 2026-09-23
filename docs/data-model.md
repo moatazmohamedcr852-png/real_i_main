@@ -1,45 +1,83 @@
-# Data model and query-index plan
+# Data model and index plan
 
-`Courses` references its instructor; `Lessons` references a course; `Submissions` references student, course, and lesson; `LiveSessions` references course and host; `Polls` references session and course; `PollResponses` references poll, session, course, and student; `Enrollments` references student and course; and `AIGuidelines` is global or course-scoped. References use MongoDB ObjectIds and Mongoose `ref` metadata.
+One PostgreSQL database, declared as plain DDL in `backend/db/schema.sql` and applied in a single transaction by `npm --prefix backend run migrate`. 19 tables, 26 indexes.
 
-Lessons and submissions are deliberately separate collections: both grow independently and support cross-course dashboard/KPI queries. Enrollment is a separate collection so both the course-access gatekeeper (`studentId`, `courseId`, `status`) and student dashboard/roster reads are indexed without unbounded arrays. Poll definitions and responses are separate collections from sessions: one immutable response document per student/poll avoids hot-document contention, and `{ pollId, optionKeys }` supports real-time tally reads. Votes are single-submit; revoting needs an explicit future replace/version policy.
+## Why relational here
 
-Named indexes are declared in each model. They serve the actual reads: instructor/published course listings; ordered course lessons; student history and grading queues; course/host session calendars; per-session poll lists; and guideline scope/version and active-resolution queries. Unique indexes protect lesson positions, submission attempts, provider rooms, and guideline versions/active state.
+The domain is reference-heavy and access-controlled: enrollment gates course reads, attendance and polls belong to a session, submissions belong to a student and an assessment. Foreign keys make those rules declarative instead of a convention every query has to remember. Two Postgres features carry real weight:
 
-Course and lesson `status` are the visibility fields: only `published` data reaches public catalog/read serializers. Course catalog filtering uses optional `category` and `difficulty` fields plus the `course_catalog_filters` named index. Pricing stores only the display access/currency/amount in this scope; payment rules are not modeled.
+- **`JSONB`** for genuinely schema-less payloads — `assessments.questions`, `submissions.responses`, `polls.options`, `attendance_records.intervals`, `live_sessions.settings`, `notifications.payload`. Everything relational is a column; only per-row variable content is JSON.
+- **Partial unique indexes** where history must survive. `enrollments` allows one active record per pair but keeps dropped and completed rows; `notifications` deduplicates only when a key is present.
 
-`Courses.enrollmentOpen` is distinct from archival. Setting it to `false` prevents future enrollment creation (to be enforced by the enrollment write service when introduced) while preserving access for existing active enrollments; `archived` remains an immediate access cutoff.
+Every primary key is `UUID DEFAULT gen_random_uuid()` from `pgcrypto`. Every table carries `created_at` / `updated_at` as `TIMESTAMPTZ`.
 
-`Assessments` embeds up to 200 structured questions because builder, serving, and grading-key reads are assessment-local. Published assessments are immutable. Assessment attempts extend `Submissions` with `assessmentId`, immutable start/expiry timestamps, stable randomized `questionOrder`, and a private grading snapshot. The private snapshot allows grading against the exact delivered version after future assessment changes. Named indexes support course assessment listings and `(studentId, assessmentId)` attempt lookup/uniqueness.
+## Entity relationships
 
-Assessment attempt status is authoritative: `in_progress`, `submitted`, `timed_out`, `finalized_due_date`, or `finalized_eligibility_lost`. `timed_out` is reserved for per-attempt time-limit expiry; `finalized_due_date` is reserved for an assessment deadline that cuts the allotted time short. Each assessment attempt retains an immutable `expirationReason` (`time_limit` or `due_date`), and `finalizationReason` (`manual_submit`, `timeout`, `due_date`, or `eligibility_lost`) supplements the terminal status for dispute reconstruction. Course archival and enrollment drop transactionally force-finalize matching in-progress attempts as `finalized_eligibility_lost`, using the snapshot for automated grading; they do not wait for client reconnection or timer expiry.
+```
+users ──┬──< courses (instructor_id) ──┬──< lessons
+        │                              ├──< enrollments ──> users
+        │                              ├──< assessments ──< submissions
+        │                              ├──< live_sessions ──┬──< attendance_records ──> users
+        │                              │                    └──< polls ──< poll_responses ──> users
+        │                              ├──< calendar_events (scope = course)
+        │                              └──< data_assets
+        ├──< refresh_tokens
+        ├──< lesson_progress
+        ├──< notifications (recipient_id)
+        ├──< chat_sessions ──< chat_messages
+        ├──< quiz_results
+        └──< ai_guidelines (scope = course)
+```
 
-`AttendanceRecords` is one bounded reconnect-interval document per session/student, replacing the active write path for the legacy embedded LiveSession attendance field. Its unique session/student index supports idempotent joins, and session-total ordering supports the instructor roster. `LiveSessions.summaryStatus` is a pending placeholder only; no AI summary generation occurs until the AI service step.
+Deleting a course cascades to lessons, enrollments, assessments, sessions, polls, calendar events, and assets. Users are never hard-deleted by this path: `users.deleted_at` is a soft delete and `submissions.student_id` deliberately does not cascade, because a learner's graded work must outlive account removal.
 
-Live poll tally is a pull endpoint backed by the named `poll_response_tally_by_option` index. Server push (SSE/WebSocket) is not part of the current transport and must be added explicitly if sub-second UI updates are required.
+## Visibility and status
 
-## Attendance authenticity decision
+`status` on courses, lessons, assessments, and live sessions is the visibility gate: `draft` → `published` → `archived`. Only published rows reach catalog and student-facing reads; archival is the immediate access cutoff and keeps history queryable.
 
-Attendance is currently self-reported through authenticated client calls by the enrolled application user; it is not verified against Jitsi connection events. This is accepted for the current phase because attendance is informational only. Revisit and replace it with a configured, signed Jitsi event/webhook integration before attendance is used for any real-stakes purpose, including grade weighting, compliance reporting, or certificate eligibility.
+`courses.enrollment_open` is separate from status — `false` blocks new enrollments while existing students retain access.
 
-The partial unique enrollment index permits only one active (`enrolled`) record for a student/course pair while retaining dropped/completed history. A later re-enrollment creates a new record after the prior active record is dropped or completed.
+`assessments.questions` holds the whole bank as `JSONB` because builder, serving, and grading-key reads are always assessment-local. An attempt copies `question_snapshot` at start, so a later edit to the assessment cannot change what a student is graded against. `attempt_status` is authoritative (`in_progress`, `submitted`, `timed_out`, `finalized_due_date`, `finalized_eligibility_lost`) with `expiration_reason` and `finalization_reason` retained for dispute reconstruction.
 
-## Calendar, notifications, and analytics
+Submissions cover lesson work and assessment attempts in one table, separated by `kind`, because both feed the same dashboard and grading-queue reads. `max_attempts` is enforced in application code, not the schema.
 
-`CalendarEvents` stores bounded administrator-authored platform events. An event is either global or course-scoped, never both; range queries combine those events with published assessment deadlines and scheduled/live sessions. Calendar is a pull API in this phase. Students receive only global events and content from their currently active, published-course enrollments; instructors receive global events and their own course content; administrators receive all content.
+## Index plan
 
-`Notifications` stores recipient-owned delivery records. The initial types are assessment-grade completion, calendar reminder, and system notification. Grade-completion delivery is written inside the manual-grade transaction, keyed by submission so a retry cannot duplicate it. Payloads hold identifiers only, never feedback, essay text, or other assessment content. Recipient/read-time ordering supports the inbox; the recipient/deduplication partial unique index makes delivery idempotent.
+Indexes exist for reads the routes actually perform:
 
-KPIs are aggregation reads, not stored counters: active learners are distinct active enrollments, completion rate is completed divided by enrolled-plus-completed enrollment records, assessment average uses finalized scored assessment attempts, and enrollment trends group enrollment timestamps by UTC day. Instructors are scoped to their owned courses; administrators are platform-wide; students have no KPI access. Revenue is deliberately returned as `{ notAvailable: true }`: pricing metadata is not a payment ledger, so no revenue estimate is made until a payment/transaction model is explicitly introduced.
+| Index | Serves |
+| --- | --- |
+| `idx_courses_published` (partial) | Public catalog, newest first |
+| `idx_courses_catalog` | Category and difficulty filtering |
+| `idx_courses_instructor` | Instructor's own course list |
+| `idx_lessons_course_position` | Ordered lesson playback |
+| `idx_enrollment_active` (partial unique) | One active enrollment per student/course |
+| `idx_enrollment_student` / `_course` | Student dashboard, course roster |
+| `idx_submission_course` | Grading queue by course and grading status |
+| `idx_submission_student` | Student attempt history |
+| `idx_sessions_course` / `idx_sessions_status` | Course calendar, live-session lookup |
+| `attendance_records UNIQUE(session_id, student_id)` | Idempotent join, per-session roster |
+| `idx_polls_session` | Live poll list, tally reads |
+| `poll_responses UNIQUE(poll_id, student_id)` | One vote per student per poll |
+| `idx_ai_guidelines_scope` | Global plus course-scoped active resolution |
+| `idx_notifications_recipient_dedup` (partial unique) | Idempotent delivery |
+| `idx_chat_messages_session` | Session history in order |
+| `quiz_results UNIQUE(student_id, task_id)` | Upsert on retake |
 
-## AI retrieval material and rollout decisions
+`UNIQUE(course_id, position)` on lessons makes duplicate positions a database error rather than a UI bug; reordering is a guarded update.
 
-`AIVectorChunks` is an AI-service-owned collection. Each document carries a bounded course-material chunk, its source `documentId`/title/ordinal attribution, and an embedding. The unique named compound index on `(courseId, documentId, ordinal)` makes ingestion replacement idempotent; a MongoDB Atlas Search vector index named by `MONGODB_VECTOR_INDEX` must use the configured embedding dimension and cosine similarity, with `courseId` configured as a filter field. `AIGuidelines` remains the existing shared collection; the AI service may create draft guidelines, while active guideline reads inject the global and course-scoped records.
+## Attendance authenticity — open decision
 
-### AI quota decision
+Attendance is written by authenticated client calls (`/attendance/join`, `/attendance/leave`), not by verified Jitsi connection events. Acceptable while attendance is informational only. **Before it feeds grades, certificates, or compliance reporting, replace it with signed Jitsi webhooks or a meeting-events API**; the reconnect-interval model transfers to a verified source without schema change.
 
-The AI service enforces configurable document limits plus `MAX_CHUNKS_PER_COURSE` across stored chunks. The current `MAX_CHUNKS_PER_COURSE=10000` and `AI_CHAT_RATE_LIMIT_PER_MINUTE=10` are deliberately conservative placeholders, not production capacity decisions. The latter is enforced through a shared Mongo-backed actor/minute counter so it is not multiplied by AI-service replicas. Before production rollout, choose evidence-based course-material and chat-rate values, record them in deployment configuration, and test them under expected ingestion and tutoring traffic; do not silently retain the development defaults.
+Poll tallies are a pull endpoint. There is no SSE or WebSocket transport, so results update on the client's poll interval, not sub-second.
 
-### Vector-search production parity decision
+## KPIs are reads, not counters
 
-Automated retrieval tests use a deterministic in-memory cosine repository because the real-Mongo test replica does not implement Atlas `$vectorSearch`. This validates chunking, course filtering, ranking logic, citation attribution, and agent grounding flow, but does not prove Atlas index configuration or production retrieval quality. Before production rollout, a smoke test against an actual Atlas/vector-search-capable instance is mandatory: ingest known materials, query with known embeddings, verify the configured index/filter/dimension, and confirm returned citations map to the expected chunks.
+Active learners, completion rate, assessment averages, and enrollment trends aggregate live tables — no stored counters to drift. Instructors are scoped to courses they own, admins platform-wide, students get none. Revenue is not modeled: `courses.pricing_*` is display metadata, not a ledger, so no revenue figure is reported.
+
+## Tables that outgrew their original design
+
+- `ai_guidelines` stores versioned instructor/admin directives with global or course scope. They are readable through `GET /v1/agent/guidelines/active/:id`, but no generation path reads them, so they currently shape nothing — see [ai-tutor.md](ai-tutor.md).
+- `data_assets` records uploaded files. `file_path` exists but is unused by the upload route, and no chunking or embedding table backs the "processing" endpoints — see [ai-tutor.md](ai-tutor.md).
+- `quiz_results` records AI-generated quiz attempts under a free-text `task_id`, a separate path from `submissions`.
