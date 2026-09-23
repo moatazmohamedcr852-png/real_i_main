@@ -22,7 +22,7 @@ async function seed() {
         `INSERT INTO users (email, password_hash, name, role)
          VALUES ($1, $2, $3, $4)
          ON CONFLICT (email) DO UPDATE
-         SET name = EXCLUDED.name, role = EXCLUDED.role
+         SET name = EXCLUDED.name, role = EXCLUDED.role, password_hash = EXCLUDED.password_hash
          RETURNING id, email, role, name`,
         [u.email, hash, u.name, u.role]
       );
@@ -192,6 +192,12 @@ async function seed() {
 
     await client.query('COMMIT');
     console.log('Seeding completed successfully!');
+    console.log('==============================================');
+    console.log('Seeded accounts (login at http://localhost:3001/login):');
+    for (const u of users) {
+      console.log(`  ${u.role.padEnd(10)} ${u.email}  /  ${u.password}`);
+    }
+    console.log('==============================================');
   } catch (err) {
     await client.query('ROLLBACK');
     console.error('Seeding failed:', err);

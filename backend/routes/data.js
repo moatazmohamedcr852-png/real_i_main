@@ -5,6 +5,11 @@ import { authenticate, requireRoles, allowAnonymous } from '../middleware/auth.j
 
 const router = Router();
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+// The frontend sometimes passes agent names ("general") or "undefined" as courseId;
+// only real UUIDs may hit UUID-typed columns.
+const safeCourseId = (value) => (typeof value === 'string' && UUID_RE.test(value) ? value : null);
+
 // GET /data/projects (matches frontend getProjects())
 router.get('/data/projects', authenticate, async (_req, res, next) => {
   try {
@@ -165,7 +170,7 @@ router.post('/nlp/index/push/:id', authenticate, (req, res) => {
 async function chatHandler(req, res, next) {
   try {
     const { message, session_id } = req.body || {};
-    const courseId = req.params.courseId;
+    const courseId = safeCourseId(req.params.courseId);
 
     let sessionId = session_id;
     if (!sessionId) {
@@ -177,13 +182,53 @@ async function chatHandler(req, res, next) {
     }
 
     // Save user message
-    await query('INSERT INTO chat_messages (session_id, role, content) VALUES ($1, \'user\', $2)', [sessionId, message || '']);
+    await query("INSERT INTO chat_messages (session_id, role, content) VALUES ($1, 'user', $2)", [sessionId, message || '']);
 
-    // Generate intelligent contextual response
-    const botReply = `Hello! I am Raaed, your AI Tutor for this course. Regarding your question: "${message}", the key principle is that REAL_i integrates multi-agent collaborative workflows with grounding from course materials. You can review the course lessons and live sessions anytime for further details.`;
+    // Load recent chat history for context (last 10 messages)
+    const historyRes = await query(
+      'SELECT role, content FROM chat_messages WHERE session_id = $1 ORDER BY created_at DESC LIMIT 10',
+      [sessionId]
+    );
+    const history = historyRes.rows.reverse();
+
+    // Load course info for system context
+    let courseContext = '';
+    if (courseId && courseId !== 'undefined') {
+      const courseRes = await query('SELECT title, description FROM courses WHERE id = $1', [courseId]);
+      if (courseRes.rows.length > 0) {
+        courseContext = `\nThe student is currently enrolled in the course: "${courseRes.rows[0].title}". Course description: ${courseRes.rows[0].description || 'N/A'}.`;
+      }
+    }
+
+    let botReply;
+    try {
+      const Groq = (await import('groq-sdk')).default;
+      const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+
+      const messages = [
+        {
+          role: 'system',
+          content: `You are Raaed, an expert AI Tutor for the REAL_i educational platform. You are friendly, thorough, and pedagogically skilled. Provide clear, structured explanations. Use markdown formatting for readability (bold, lists, code blocks where appropriate). Keep responses concise but comprehensive.${courseContext}`
+        },
+        ...history.map(m => ({ role: m.role, content: m.content }))
+      ];
+
+      const completion = await groq.chat.completions.create({
+        model: 'qwen/qwen3.8-27b',
+        messages,
+        temperature: 0.7,
+        max_tokens: 1024,
+        top_p: 0.9,
+      });
+
+      botReply = completion.choices[0]?.message?.content || 'I apologize, I could not generate a response. Please try again.';
+    } catch (llmErr) {
+      console.error('Groq LLM error:', llmErr.message);
+      botReply = `Hello! I am Raaed, your AI Tutor. I'm experiencing a temporary issue connecting to my language model. Regarding your question: "${message}", please try again in a moment. Error: ${llmErr.message}`;
+    }
 
     // Save assistant message
-    await query('INSERT INTO chat_messages (session_id, role, content) VALUES ($1, \'assistant\', $2)', [sessionId, botReply]);
+    await query("INSERT INTO chat_messages (session_id, role, content) VALUES ($1, 'assistant', $2)", [sessionId, botReply]);
 
     res.json({
       session_id: String(sessionId),
@@ -191,6 +236,7 @@ async function chatHandler(req, res, next) {
       role: 'assistant',
       content: botReply,
       message: botReply,
+      response: botReply,
       status: 'success'
     });
   } catch (err) {
@@ -216,34 +262,68 @@ async function generateQuizHandler(req, res, next) {
   try {
     const { topic = 'General Platform', count = 5, num_questions = 5, title } = req.body || {};
     const numQ = count || num_questions || 5;
+    const courseId = safeCourseId(req.params.courseId);
 
-    const quizQuestions = [
-      {
-        id: 'q-1',
-        question: `What is the core foundation of ${topic}?`,
-        options: ['Multi-agent reasoning', 'Monolithic server', 'Manual calculation', 'Local cache only'],
-        correct_answer: 'Multi-agent reasoning',
-        correctIndex: 0,
-        explanation: 'Multi-agent reasoning provides collaborative and specialized task decomposition.'
-      },
-      {
-        id: 'q-2',
-        question: 'How are RAG citations verified in REAL_i?',
-        options: ['Against ingested course chunks', 'Random guessing', 'Static hardcoded strings', 'External blogs'],
-        correct_answer: 'Against ingested course chunks',
-        correctIndex: 0,
-        explanation: 'Grounding guarantees answers come strictly from vetted course materials.'
+    let courseContext = '';
+    if (courseId && courseId !== 'undefined') {
+      const courseRes = await query('SELECT title, description FROM courses WHERE id = $1', [courseId]);
+      if (courseRes.rows.length > 0) {
+        courseContext = `\nContext: This quiz is for the course "${courseRes.rows[0].title}". ${courseRes.rows[0].description || ''}`;
       }
-    ];
+    }
+
+    const Groq = (await import('groq-sdk')).default;
+    const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+
+    const prompt = `Generate a multiple choice quiz about "${topic}". Create exactly ${numQ} questions.${courseContext}
+Respond ONLY with a valid JSON object of the form {"questions": [...]}, where each item has this exact structure:
+{
+  "id": "unique-string-id",
+  "question": "The question text",
+  "options": ["Option A", "Option B", "Option C", "Option D"],
+  "correct_answer": "The exact string of the correct option",
+  "correctIndex": 0,
+  "explanation": "Brief explanation of why it's correct"
+}
+correctIndex is the 0-based integer index of the correct option. Do not include comments or extra keys.`;
+
+    const completion = await groq.chat.completions.create({
+      model: 'qwen/qwen3.8-27b',
+      messages: [
+        { role: 'system', content: 'You are an expert exam writer. Respond ONLY with valid JSON.' },
+        { role: 'user', content: prompt }
+      ],
+      temperature: 0.5,
+      response_format: { type: 'json_object' }
+    });
+
+    let quizQuestions = [];
+    try {
+      const rawOutput = completion.choices[0]?.message?.content || '[]';
+      const parsed = JSON.parse(rawOutput);
+      quizQuestions = Array.isArray(parsed) ? parsed : (parsed.questions || Object.values(parsed)[0] || []);
+      
+      quizQuestions = quizQuestions.slice(0, numQ).map((q, i) => ({
+        id: q.id || `q-${i}`,
+        question: q.question || 'Missing question?',
+        options: Array.isArray(q.options) && q.options.length > 0 ? q.options : ['A', 'B', 'C', 'D'],
+        correct_answer: q.correct_answer || (q.options ? q.options[q.correctIndex || 0] : 'A'),
+        correctIndex: q.correctIndex !== undefined ? q.correctIndex : 0,
+        explanation: q.explanation || 'No explanation provided.'
+      }));
+    } catch (parseErr) {
+      console.error('Failed to parse Groq quiz output:', parseErr);
+      throw new Error('Failed to generate valid quiz format');
+    }
 
     res.status(201).json({
       success: true,
       title: title || `Quiz: ${topic}`,
       quiz: {
         topic,
-        questions: quizQuestions.slice(0, numQ)
+        questions: quizQuestions
       },
-      questions: quizQuestions.slice(0, numQ)
+      questions: quizQuestions
     });
   } catch (err) {
     next(err);

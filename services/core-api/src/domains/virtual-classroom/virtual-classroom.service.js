@@ -62,7 +62,39 @@ export function createVirtualClassroomService({ repo, transaction, config, logge
       const issuedAtSeconds = Math.floor(now().getTime() / 1000);
       const token = jwt.sign({ iat: issuedAtSeconds, aud: config.JITSI_APP_ID, iss: config.JITSI_APP_ID, sub: config.JITSI_DOMAIN, room: session.providerRoomId, sessionId: id(session._id), courseId: id(session.courseId), jti: crypto.randomUUID(), context: { user: { id: id(user._id), name: user.name, moderator: isModerator } } }, config.JITSI_JWT_SECRET, { algorithm: 'HS256', expiresIn: Math.max(1, Math.floor((expiresAt.getTime() - now().getTime()) / 1000)) });
       logger.info({ event: 'jitsi_join_token_issued', sessionId: id(session._id), courseId: id(session.courseId), userId: id(actor.userId), moderator: isModerator, expiresAt }, 'Jitsi join token issued');
-      return { token, room: session.providerRoomId, expiresAt, moderator: isModerator };
+      const meeting = {
+        id: id(session._id),
+        meetingId: id(session._id),
+        sessionId: id(session._id),
+        title: session.title,
+        status: session.status,
+        startsAt: session.startsAt,
+        starts_at: session.startsAt,
+        endsAt: session.endsAt,
+        ends_at: session.endsAt,
+        courseId: id(session.courseId),
+        hostId: id(session.hostId),
+        roomSlug: session.providerRoomId,
+        roomName: session.providerRoomId,
+        providerRoomId: session.providerRoomId,
+        lobbyEnabled: true,
+        security: { muteOnEntry: true, requireHostToStart: true, disableStudentScreenShare: false }
+      };
+      return {
+        success: true,
+        authorized: true,
+        waitingForHost: false,
+        isHost: isModerator,
+        moderator: isModerator,
+        user: { id: id(user._id), name: user.name, email: user.email, role: user.role },
+        meeting,
+        token,
+        joinToken: token,
+        room: session.providerRoomId,
+        roomName: session.providerRoomId,
+        expiresAt,
+        roomSlug: session.providerRoomId
+      };
     },
     async recordJoin(actor, sessionId) { const session = await studentAccess(actor, sessionId); const record = await repo.joinAttendance({ sessionId: session._id, courseId: session.courseId, studentId: actor.userId, at: now() }); logger.info({ event: 'attendance_join_recorded', sessionId: id(session._id), userId: id(actor.userId) }, 'Attendance join recorded'); return calculatePresence(record, session, now()); },
     async recordLeave(actor, sessionId) { const liveSession = await studentAccess(actor, sessionId); const record = await transaction((session) => repo.leaveAttendance({ sessionId: liveSession._id, studentId: actor.userId, at: now(), session })); logger.info({ event: 'attendance_leave_recorded', sessionId: id(liveSession._id), userId: id(actor.userId) }, 'Attendance leave recorded'); return record ? calculatePresence(record, liveSession, now()) : { totalSeconds: 0, sessionDurationSeconds: Math.floor((new Date(liveSession.endsAt) - new Date(liveSession.startsAt)) / 1000), presencePercentage: 0 }; },
