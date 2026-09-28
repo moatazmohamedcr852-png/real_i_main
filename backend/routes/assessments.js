@@ -3,18 +3,25 @@ import { query } from '../db/pool.js';
 import { authenticate, requireRoles } from '../middleware/auth.js';
 
 const router = Router();
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function normalizeCourseId(value) {
+  if (value === undefined || value === null || value === '' || /^(general|global)( \(all courses\))?$/i.test(String(value))) return null;
+  return UUID_RE.test(String(value)) ? String(value) : undefined;
+}
 
 function formatAssessment(a) {
   const questions = typeof a.questions === 'string' ? JSON.parse(a.questions) : (a.questions || []);
   return {
     id: String(a.id),
     _id: String(a.id),
-    courseId: String(a.course_id),
-    course_id: String(a.course_id),
+    courseId: a.course_id ? String(a.course_id) : null,
+    course_id: a.course_id ? String(a.course_id) : null,
     authorId: String(a.author_id),
     title: a.title,
     description: a.instructions || '',
     instructions: a.instructions || '',
+    type: a.type || 'quiz',
     status: a.status,
     is_published: a.status === 'published',
     timeLimitSeconds: a.time_limit_seconds,
@@ -50,19 +57,30 @@ router.get('/assessments', authenticate, async (req, res, next) => {
     const courseId = req.query.courseId || req.query.course_id;
     const { status, type } = req.query;
 
-    let sql = 'SELECT * FROM assessments WHERE 1=1';
+    let sql = 'SELECT a.* FROM assessments a WHERE 1=1';
     const params = [];
 
+    if (req.user.role === 'student') {
+      params.push(req.user.id);
+      sql += ` AND a.status = 'published' AND (a.course_id IS NULL OR EXISTS (
+        SELECT 1 FROM enrollments e
+        WHERE e.student_id = $${params.length} AND e.course_id = a.course_id AND e.status IN ('enrolled', 'completed')
+      ))`;
+    }
     if (courseId) {
       params.push(courseId);
-      sql += ` AND course_id = $${params.length}`;
+      sql += ` AND a.course_id = $${params.length}`;
     }
     if (status) {
       params.push(status);
-      sql += ` AND status = $${params.length}`;
+      sql += ` AND a.status = $${params.length}`;
+    }
+    if (type) {
+      params.push(type);
+      sql += ` AND a.type = $${params.length}`;
     }
 
-    sql += ' ORDER BY created_at DESC';
+    sql += ' ORDER BY a.created_at DESC';
     const result = await query(sql, params);
     res.json(result.rows.map(formatAssessment));
   } catch (err) {
@@ -88,14 +106,49 @@ router.get('/assessments/student/me', authenticate, async (req, res, next) => {
   }
 });
 
+router.get('/assessments/:id', authenticate, async (req, res, next) => {
+  try {
+    const result = await query('SELECT * FROM assessments WHERE id = $1', [req.params.id]);
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: { code: 'ASSESSMENT_NOT_FOUND', message: 'Assessment not found.' } });
+    }
+
+    const assessment = result.rows[0];
+    if (req.user.role === 'student') {
+      const enrollment = assessment.course_id
+        ? await query(
+            "SELECT 1 FROM enrollments WHERE student_id = $1 AND course_id = $2 AND status IN ('enrolled', 'completed')",
+            [req.user.id, assessment.course_id]
+          )
+        : { rows: [{}] };
+      if (assessment.status !== 'published' || enrollment.rows.length === 0) {
+        return res.status(403).json({ error: { code: 'FORBIDDEN', message: 'This assessment is not available to you.' } });
+      }
+    } else if (req.user.role === 'instructor' && String(assessment.author_id) !== String(req.user.id)) {
+      return res.status(403).json({ error: { code: 'FORBIDDEN', message: 'You do not have permission to view this assessment.' } });
+    }
+
+    res.json(formatAssessment(assessment));
+  } catch (err) {
+    next(err);
+  }
+});
+
 // POST /courses/:courseId/assessments and POST /assessments
 async function createAssessmentHandler(req, res, next) {
   try {
-    const courseId = req.params.courseId || req.body.courseId || req.body.course_id;
-    const { title, instructions, description, status = 'draft', timeLimitSeconds = 600, randomizeQuestions = true, maxAttempts = 1, availableFrom, dueAt, questions = [] } = req.body || {};
+    const rawCourseId = req.params.courseId || req.body.courseId || req.body.course_id;
+    const courseId = normalizeCourseId(rawCourseId);
+    const { title, instructions, description, type = 'quiz', status = 'draft', timeLimitSeconds = 600, randomizeQuestions = true, maxAttempts = 1, availableFrom, dueAt, questions = [] } = req.body || {};
 
-    if (!courseId || !title) {
-      return res.status(400).json({ error: { code: 'INVALID_INPUT', message: 'courseId and title are required.' } });
+    if (!title?.trim()) {
+      return res.status(400).json({ error: { code: 'INVALID_INPUT', message: 'Title is required.' } });
+    }
+    if (courseId === undefined) {
+      return res.status(400).json({ error: { code: 'INVALID_COURSE', message: 'Select a valid course or General (All Courses).' } });
+    }
+    if (!['quiz', 'exam', 'assignment', 'task'].includes(type)) {
+      return res.status(400).json({ error: { code: 'INVALID_TYPE', message: 'Assessment type must be quiz, exam, assignment, or task.' } });
     }
 
     const formattedQuestions = questions.map((q, idx) => ({
@@ -109,14 +162,15 @@ async function createAssessmentHandler(req, res, next) {
     }));
 
     const result = await query(
-      `INSERT INTO assessments (course_id, author_id, title, instructions, status, time_limit_seconds, randomize_questions, max_attempts, available_from, due_at, questions, published_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+      `INSERT INTO assessments (course_id, author_id, title, instructions, type, status, time_limit_seconds, randomize_questions, max_attempts, available_from, due_at, questions, published_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
        RETURNING *`,
       [
         courseId,
         req.user.id,
         title.trim(),
         instructions || description || '',
+        type,
         status,
         timeLimitSeconds,
         randomizeQuestions,
@@ -146,10 +200,14 @@ async function updateAssessmentHandler(req, res, next) {
     }
 
     const a = existing.rows[0];
-    const { title, instructions, status, timeLimitSeconds, randomizeQuestions, maxAttempts, availableFrom, dueAt, questions } = req.body || {};
+    const { title, instructions, type, status, timeLimitSeconds, randomizeQuestions, maxAttempts, availableFrom, dueAt, questions } = req.body || {};
+    if (type !== undefined && !['quiz', 'exam', 'assignment', 'task'].includes(type)) {
+      return res.status(400).json({ error: { code: 'INVALID_TYPE', message: 'Assessment type must be quiz, exam, assignment, or task.' } });
+    }
 
     const newTitle = title !== undefined ? title.trim() : a.title;
     const newInstructions = instructions !== undefined ? instructions : a.instructions;
+    const newType = type !== undefined ? type : a.type;
     const newStatus = status !== undefined ? status : a.status;
     const newTimeLimit = timeLimitSeconds !== undefined ? timeLimitSeconds : a.time_limit_seconds;
     const newRandom = randomizeQuestions !== undefined ? randomizeQuestions : a.randomize_questions;
@@ -161,12 +219,12 @@ async function updateAssessmentHandler(req, res, next) {
 
     const result = await query(
       `UPDATE assessments
-       SET title = $1, instructions = $2, status = $3, time_limit_seconds = $4,
-           randomize_questions = $5, max_attempts = $6, available_from = $7,
-           due_at = $8, questions = $9, published_at = $10, updated_at = now()
-       WHERE id = $11
+       SET title = $1, instructions = $2, type = $3, status = $4, time_limit_seconds = $5,
+           randomize_questions = $6, max_attempts = $7, available_from = $8,
+           due_at = $9, questions = $10, published_at = $11, updated_at = now()
+       WHERE id = $12
        RETURNING *`,
-      [newTitle, newInstructions, newStatus, newTimeLimit, newRandom, newAttempts, newAvail, newDue, newQuestions, publishedAt, req.params.id]
+      [newTitle, newInstructions, newType, newStatus, newTimeLimit, newRandom, newAttempts, newAvail, newDue, newQuestions, publishedAt, req.params.id]
     );
 
     res.json(formatAssessment(result.rows[0]));
@@ -330,60 +388,113 @@ router.post('/attempts/:submissionId/submit', authenticate, async (req, res, nex
 
     const sub = subRes.rows[0];
     const questions = sub.question_snapshot || [];
-    const responses = sub.responses || [];
+    const storedResponses = sub.responses || [];
+    const incoming = Array.isArray(req.body?.responses) ? req.body.responses : storedResponses;
 
-    // Auto-grading
-    let totalScore = 0;
-    let maxScore = 0;
-    for (const q of questions) {
-      const qPoints = Number(q.points || 1);
-      maxScore += qPoints;
-      const resp = responses.find((r) => r.questionId === q.id || r.id === q.id);
-      if (resp && q.correctOptionIds && q.correctOptionIds.includes(resp.value)) {
-        totalScore += qPoints;
-      }
-    }
-
-    const percentage = maxScore > 0 ? Math.round((totalScore / maxScore) * 100) : 100;
+    const grade = gradeResponses(questions, incoming);
+    const hasContent = grade.answered > 0;
+    const isAutoGradable = questions.length > 0 && questions.every((q) => q.correctOptionIds || q.correctIndex !== undefined);
+    const gradingStatus = !hasContent ? 'pending' : (isAutoGradable ? 'auto_graded' : 'manual_review');
+    const gradingScore = hasContent && isAutoGradable ? grade.percentage : null;
 
     const result = await query(
       `UPDATE submissions
-       SET attempt_status = 'submitted', submitted_at = now(),
-           grading_status = 'auto_graded', grading_score = $1, graded_at = now(), updated_at = now()
-       WHERE id = $2
+       SET responses = $1, attempt_status = 'submitted', submitted_at = now(),
+           grading_status = $2, grading_score = $3,
+           graded_at = CASE WHEN $2 = 'auto_graded' THEN now() ELSE graded_at END, updated_at = now()
+       WHERE id = $4
        RETURNING *`,
-      [percentage, sub.id]
+      [JSON.stringify(incoming), gradingStatus, gradingScore, sub.id]
     );
 
     res.json({
       success: true,
       submission: result.rows[0],
-      score: percentage,
-      maxScore: 100
+      score: gradingScore,
+      maxScore: grade.possible
     });
   } catch (err) {
     next(err);
   }
 });
 
+// Auto-grade a set of responses against an assessment's questions.
+function gradeResponses(questions, responses) {
+  const qs = Array.isArray(questions) ? questions : [];
+  const rs = Array.isArray(responses) ? responses : [];
+  if (qs.length === 0) return { percentage: null, earned: 0, possible: 0, answered: rs.length };
+
+  let earned = 0;
+  let possible = 0;
+  let answered = 0;
+  for (const q of qs) {
+    const pts = Number(q.points || 1);
+    possible += pts;
+    const resp = rs.find((r) => (r.questionId || r.id) === q.id);
+    if (!resp) continue;
+    const value = resp.value !== undefined ? resp.value : resp.answer;
+    if (value === undefined || value === null || value === '') continue;
+    answered += 1;
+    const correct = q.correctOptionIds || (q.correctIndex !== undefined ? [q.correctIndex] : null);
+    if (correct && correct.length && correct.includes(value)) earned += pts;
+  }
+
+  return {
+    percentage: possible > 0 ? Math.round((earned / possible) * 100) : 0,
+    earned,
+    possible,
+    answered
+  };
+}
+
 // POST /assessments/:id/submit
 router.post('/assessments/:id/submit', authenticate, async (req, res, next) => {
   try {
-    const { submissionId, answers, responses } = req.body || {};
+    const { submissionId, answers, responses, files } = req.body || {};
+    const provided = responses || answers || [];
+
+    const assessRes = await query('SELECT * FROM assessments WHERE id = $1', [req.params.id]);
+    if (assessRes.rows.length === 0) {
+      return res.status(404).json({ error: { code: 'ASSESSMENT_NOT_FOUND', message: 'Assessment not found.' } });
+    }
+    const a = assessRes.rows[0];
+    const questions = typeof a.questions === 'string' ? JSON.parse(a.questions) : (a.questions || []);
+
     if (submissionId) {
-      req.params.submissionId = submissionId;
-      return next(); // handled or redirect
+      const subRes = await query('SELECT * FROM submissions WHERE id = $1 AND student_id = $2', [submissionId, req.user.id]);
+      if (subRes.rows.length === 0) {
+        return res.status(404).json({ error: { code: 'ATTEMPT_NOT_FOUND', message: 'Attempt not found.' } });
+      }
+      const sub = subRes.rows[0];
+      const snapshot = sub.question_snapshot || questions;
+      const merged = Array.isArray(provided) && provided.length ? provided : (sub.responses || []);
+      const grade = gradeResponses(snapshot, merged);
+      const result = await query(
+        `UPDATE submissions
+         SET responses = $1, attempt_status = 'submitted', submitted_at = now(),
+             grading_status = $2, grading_score = $3, graded_at = now(), updated_at = now()
+         WHERE id = $4
+         RETURNING *`,
+        [JSON.stringify(merged), grade.answered ? 'auto_graded' : 'pending', grade.answered ? grade.percentage : null, sub.id]
+      );
+      return res.json({ success: true, submission: result.rows[0], score: grade.answered ? grade.percentage : null });
     }
 
-    // Direct submit fallback
+    // Direct submit: grade against the stored answer key. No answers => no score.
+    const grade = gradeResponses(questions, provided);
+    const hasContent = grade.answered > 0 || (Array.isArray(files) && files.length > 0);
+    const isAutoGradable = questions.length > 0 && questions.every((q) => q.correctOptionIds || q.correctIndex !== undefined);
+    const gradingStatus = !hasContent ? 'pending' : (isAutoGradable ? 'auto_graded' : 'manual_review');
+    const gradingScore = hasContent && isAutoGradable ? grade.percentage : null;
+
     const result = await query(
-      `INSERT INTO submissions (student_id, course_id, assessment_id, kind, submission_type, responses, attempt_status, grading_status, grading_score, submitted_at)
-       VALUES ($1, (SELECT course_id FROM assessments WHERE id = $2), $2, 'assessment', 'mcq', $3, 'submitted', 'graded', 100, now())
+      `INSERT INTO submissions (student_id, course_id, assessment_id, kind, submission_type, responses, attempt_status, grading_status, grading_score, submitted_at, graded_at)
+       VALUES ($1, $2, $3, 'assessment', 'mcq', $4, 'submitted', $5, $6, now(), $7)
        RETURNING *`,
-      [req.user.id, req.params.id, JSON.stringify(responses || answers || [])]
+      [req.user.id, a.course_id, req.params.id, JSON.stringify(provided), gradingStatus, gradingScore, gradingStatus === 'auto_graded' ? new Date() : null]
     );
 
-    res.json({ success: true, submission: result.rows[0], score: 100 });
+    res.json({ success: true, submission: result.rows[0], score: gradingScore });
   } catch (err) {
     next(err);
   }

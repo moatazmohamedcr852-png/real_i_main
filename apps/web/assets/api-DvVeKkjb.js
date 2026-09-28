@@ -295,6 +295,7 @@ export const clearSession = (id) => r.delete(`/agent/session/${id}`);
 export const getActiveGuidelines = (id) => r.get(`/agent/guidelines/active/${id}`).catch(() => []);
 export const getAssignedQuizzes = (id) => r.get(`/agent/quizzes/${id}`).catch(() => []);
 export const submitQuizResult = (data) => r.post("/agent/quizzes/results", data);
+export const gradeAiQuiz = (quizId, answers) => r.post(`/ai/quizzes/${quizId}/grade`, { answers });
 export const getCompletedQuizzes = (id) => r.get(`/agent/quizzes/completed/${id}`).catch(() => []);
 export const createTask = (req, sessionId = null) => r.post("/admin/task/create", { request: req, session_id: sessionId });
 export const adminHealthCheck = () => r.get("/health").catch(() => r.get("/admin/health"));
@@ -329,10 +330,14 @@ export const getCourses = (params = {}) => {
 };
 
 export const getCourse = (id) => r.get(`/courses/${id}`);
+export const createCourse = (data) => r.post(`/courses`, data);
 export const updateCourse = (id, data) => r.patch(`/courses/${id}`, data).catch(() => r.put(`/courses/${id}`, data));
 export const deleteCourse = (id) => r.delete(`/courses/${id}`);
 
 export const enrollCourse = async (courseId) => r.post(`/courses/${courseId}/enroll`, {});
+
+export const getSettings = () => r.get(`/admin/settings`);
+export const saveSettings = (data) => r.put(`/admin/settings`, data);
 
 export const adminEnrollStudent = (courseId, studentId) =>
   r.post(`/courses/${courseId}/enroll/${studentId}`, {}).catch(() => ({ success: true, courseId, studentId }));

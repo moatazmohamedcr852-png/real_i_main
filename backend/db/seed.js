@@ -75,8 +75,8 @@ async function seed() {
     await client.query(
       `INSERT INTO lessons (course_id, title, content, position, status, published_at)
        VALUES 
-       ($1, 'Welcome to REAL_i', 'REAL_i is an enterprise multi-agent learning platform. Core API is the primary backend powering the entire platform. Students enroll in published courses, complete interactive lessons, take assessments, and join live classroom sessions.', 1, 'published', now()),
-       ($1, 'Understanding Agent Tutoring', 'In this lesson, you will learn how the AI Tutor Raaed processes course materials and assists students in real-time.', 2, 'published', now())
+       ($1, 'Welcome to REAL_i', 'REAL_i is a learning platform built on an Express API and a PostgreSQL database. Students enroll in published courses, complete interactive lessons, take assessments, and join live classroom sessions.', 1, 'published', now()),
+       ($1, 'Understanding Agent Tutoring', 'In this lesson, you will learn how the AI Tutor Raaed answers course questions and assists students in real-time.', 2, 'published', now())
        ON CONFLICT (course_id, position) DO NOTHING`,
       [course1Id]
     );
@@ -110,9 +110,9 @@ async function seed() {
       {
         id: 'q1',
         type: 'mcq',
-        prompt: 'What is the primary API service powering the REAL_i platform?',
+        prompt: 'Which database backs the REAL_i platform?',
         options: [
-          { id: 'opt1', text: 'Core API' },
+          { id: 'opt1', text: 'PostgreSQL' },
           { id: 'opt2', text: 'Static CDN' },
           { id: 'opt3', text: 'Legacy Cache' },
           { id: 'opt4', text: 'External Proxy' }

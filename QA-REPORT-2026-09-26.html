@@ -1,0 +1,514 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>REAL_i Platform — QA Revalidation Report — 26 September 2026</title>
+<style>
+  :root{
+    --bg:#f7f7f8; --card:#ffffff; --ink:#15161a; --muted:#5d6270;
+    --line:#e2e4ea; --accent:#1f4fd8;
+    --pass:#0f7b3f; --pass-bg:#e7f6ec;
+    --fail:#b4232a; --fail-bg:#fdeceb;
+    --part:#9a6100; --part-bg:#fdf3e0;
+    --block:#4b5563; --block-bg:#eef0f3;
+    --fixed:#0f7b3f;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+       font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+  .wrap{max-width:1080px;margin:0 auto;padding:40px 24px 80px}
+  header.rpt{border-bottom:3px solid var(--ink);padding-bottom:20px;margin-bottom:32px}
+  header.rpt h1{margin:0 0 6px;font-size:30px;letter-spacing:-.4px}
+  header.rpt .sub{color:var(--muted);font-size:15px}
+  header.rpt .meta{margin-top:14px;font-size:13px;color:var(--muted)}
+  header.rpt .meta b{color:var(--ink);font-weight:600}
+  h2{font-size:21px;margin:44px 0 12px;padding-bottom:8px;border-bottom:1px solid var(--line)}
+  h3{font-size:16px;margin:28px 0 8px}
+  p{margin:10px 0}
+  ul,ol{margin:10px 0;padding-left:22px}
+  li{margin:5px 0}
+  code{background:#eef0f4;padding:1px 5px;border-radius:4px;font-size:12.5px;
+       font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:18px 20px;margin:16px 0}
+  table{width:100%;border-collapse:collapse;margin:14px 0;font-size:13.5px;background:var(--card)}
+  th,td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{background:#f0f1f5;font-size:11.5px;text-transform:uppercase;letter-spacing:.06em;color:#3d4351}
+  tbody tr:last-child td{border-bottom:none}
+  table.counts td:first-child{font-weight:600}
+  .badge{display:inline-block;padding:2px 9px;border-radius:20px;font-size:11.5px;font-weight:700;
+         letter-spacing:.03em;white-space:nowrap}
+  .b-pass{color:var(--pass);background:var(--pass-bg)}
+  .b-fail{color:var(--fail);background:var(--fail-bg)}
+  .b-part{color:var(--part);background:var(--part-bg)}
+  .b-block{color:var(--block);background:var(--block-bg)}
+  .b-fixed{color:var(--fixed);background:var(--pass-bg)}
+  .sev{display:inline-block;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em}
+  .s-crit{background:#2b0a0c;color:#ffd9dc}
+  .s-high{background:var(--fail-bg);color:var(--fail)}
+  .s-med{background:var(--part-bg);color:var(--part)}
+  .s-low{background:var(--block-bg);color:var(--block)}
+  .id{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12.5px;font-weight:700;white-space:nowrap}
+  .kpis{display:flex;flex-wrap:wrap;gap:12px;margin:18px 0}
+  .kpi{flex:1 1 150px;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 16px}
+  .kpi .n{font-size:28px;font-weight:800;line-height:1.1}
+  .kpi .l{font-size:11.5px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);margin-top:4px}
+  .kpi.pass .n{color:var(--pass)} .kpi.fail .n{color:var(--fail)}
+  .kpi.part .n{color:var(--part)} .kpi.block .n{color:var(--block)}
+  .callout{border-left:4px solid var(--fail);background:var(--fail-bg);padding:12px 16px;border-radius:0 8px 8px 0;margin:16px 0}
+  .callout.warn{border-left-color:var(--part);background:var(--part-bg)}
+  .callout.good{border-left-color:var(--pass);background:var(--pass-bg)}
+  .callout p{margin:4px 0}
+  .note{font-size:13px;color:var(--muted)}
+  .toc{columns:2;column-gap:32px;font-size:14px}
+  .toc a{color:var(--accent);text-decoration:none}
+  .toc a:hover{text-decoration:underline}
+  .grp td{background:#f7f8fa;font-weight:700;font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:#3d4351}
+  footer{margin-top:56px;padding-top:18px;border-top:1px solid var(--line);font-size:13px;color:var(--muted)}
+  @media print{ body{background:#fff} .wrap{padding:0;max-width:none} .card,table{break-inside:avoid} h2{break-after:avoid} }
+  @media (max-width:720px){ .toc{columns:1} }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="rpt">
+  <h1>REAL_i Platform — QA Revalidation Report</h1>
+  <div class="sub">Full re-run of the 49-scenario exploratory suite against the current PostgreSQL build</div>
+  <div class="meta">
+    <b>Date:</b> 26 September 2026 &nbsp;·&nbsp;
+    <b>Build:</b> branch <code>main</code>, commit <code>c2e20cd</code> + uncommitted documentation/MongoDB-removal changes &nbsp;·&nbsp;
+    <b>Stack:</b> Express 4 + PostgreSQL 16, precompiled SPA served from <code>apps/web/</code> at <code>http://localhost:3001</code><br>
+    <b>Method:</b> live browser execution with network capture; every ambiguous result confirmed against deployed source or a direct API call (section 7)<br>
+    <b>Supersedes:</b> the QA report of 4 September 2026, which covered an earlier version of the platform
+  </div>
+</header>
+
+<div class="card">
+  <strong>Contents</strong>
+  <div class="toc">
+    <ol>
+      <li><a href="#s1">Summary of results</a></li>
+      <li><a href="#s2">Comparison with the 4 September report</a></li>
+      <li><a href="#s3">Note on personas</a></li>
+      <li><a href="#s4">Defect log</a></li>
+      <li><a href="#s5">Test case log — Admin</a></li>
+      <li><a href="#s6">Test case log — Student</a></li>
+      <li><a href="#s7">Verification notes</a></li>
+      <li><a href="#s8">Side effects of this test run</a></li>
+      <li><a href="#s9">Recommendations</a></li>
+    </ol>
+  </div>
+</div>
+
+<h2 id="s1">1. Summary of results</h2>
+
+<div class="kpis">
+  <div class="kpi"><div class="n">49</div><div class="l">Test cases run</div></div>
+  <div class="kpi pass"><div class="n">26</div><div class="l">Passed</div></div>
+  <div class="kpi fail"><div class="n">16</div><div class="l">Failed</div></div>
+  <div class="kpi part"><div class="n">4</div><div class="l">Partial</div></div>
+  <div class="kpi block"><div class="n">3</div><div class="l">Blocked / not run</div></div>
+</div>
+
+<table class="counts">
+  <thead><tr><th>Metric</th><th>4 September 2026</th><th>26 September 2026 (this run)</th><th>Direction</th></tr></thead>
+  <tbody>
+    <tr><td>Test cases run</td><td>49</td><td>49</td><td>—</td></tr>
+    <tr><td>Passed</td><td>35</td><td>26</td><td>Worse</td></tr>
+    <tr><td>Failed</td><td>12</td><td>16</td><td>Worse</td></tr>
+    <tr><td>Partial</td><td>1</td><td>4</td><td>Worse</td></tr>
+    <tr><td>Blocked / not run</td><td>1</td><td>3</td><td>Worse</td></tr>
+    <tr><td>Distinct defects</td><td>14</td><td>24</td><td>Worse</td></tr>
+    <tr><td>Old defects fixed</td><td>—</td><td>5 of 14</td><td>Better</td></tr>
+  </tbody>
+</table>
+
+<p>Five of the fourteen defects from the previous report are genuinely fixed, and the four issues reported to me directly before this run — the admin live-session <code>403_COURSE_ENROLLMENT_GUARD</code>, the stuck WebRTC overlay, AI quiz generation, and the blank student chatbot replies — are all confirmed working. The live-classroom tooling remains the strongest part of the product.</p>
+
+<p>Against that, the platform has <strong>regressed overall</strong>. Nine defects that did not exist in the September 4 build are now present, and three of them are severe enough that I would not put this build in front of students:</p>
+
+<div class="callout">
+  <p><strong>1. A student can submit an empty assessment and be awarded 100%.</strong> The submission page renders no input fields at all, the button posts <code>{answers:{}, files:[]}</code>, and the record is stored as <code>grading_status: "graded"</code>, <code>grading_score: "100.00"</code>. This is not a display bug — it is what the admin KPI <code>assessmentAvg: 100</code> is measuring.</p>
+  <p><strong>2. Every student statistic is wrong.</strong> A freshly registered student enrolled in exactly one course is told they have 39 courses enrolled, their completed course is at 0%, and their grade is F. The backend already returns the correct figures (<code>enrolled_courses: [1 id]</code>, <code>completed_lessons: [1]</code>); four pages ignore them and count the whole public catalogue instead.</p>
+  <p><strong>3. Students cannot take a multiple-choice quiz through the UI.</strong> Assessments carry no <code>type</code> field, so every one of them is routed to the <em>assignment</em> upload page instead of the exam runner. The runner exists at <code>/take</code> and nothing in the interface ever links to it.</p>
+</div>
+
+<p>None of this is deep structural damage. Defects 1 and 3 are one missing field and one wrong route target; defect 2 is four pages reading the wrong endpoint. They are cheap to fix and expensive to leave.</p>
+
+<h2 id="s2">2. Comparison with the 4 September report</h2>
+
+<h3>Fixed (5)</h3>
+<table>
+  <thead><tr><th>Old ID</th><th>What it was</th><th>Evidence it is fixed now</th></tr></thead>
+  <tbody>
+    <tr><td class="id">DEF-02</td><td>Course preview said its curriculum was "being updated" despite 12 real lessons</td><td>The preview now renders the actual curriculum: <em>"Course Curriculum · 1 lessons · Multi-Agent Coordination Patterns · 15 mins"</em> (S-CAT-01)</td></tr>
+    <tr><td class="id">DEF-07</td><td>Admin "Total Users" showed 0/0 on first load</td><td>Correct on first paint — <code>8 TOTAL USERS</code> — via a single <code>useEffect</code> with <code>Promise.all</code>; the loading flag no longer gates the subscriber (A-DASH-01)</td></tr>
+    <tr><td class="id">DEF-11</td><td>Data Manager "Inject Record" failed silently on blank fields</td><td>Backend 400 is now surfaced verbatim: <em>"Add failed: Guideline directive/content is required."</em> The old <code>ACTION FAILED —</code> string no longer exists in the bundle (A-DATA-02)</td></tr>
+    <tr><td class="id">DEF-12</td><td>Admin profile name update failed with no feedback</td><td>The Full Name field is now <code>required</code>; a blank save is stopped by native validation (<em>"Please fill out this field."</em>) and no request is sent (A-PROF-02)</td></tr>
+    <tr><td class="id">DEF-13</td><td>"Topic Focus" was labelled <em>(Optional)</em> but required, and the warning vanished in under a second</td><td>The word <em>Optional</em> no longer appears on the page, and the warning persists a measured ~4 s (visible at 3600 ms, gone by 4200 ms) — matching the 4000 ms toast setting (S-QUIZ-01/02)</td></tr>
+  </tbody>
+</table>
+
+<h3>Still present (8)</h3>
+<table>
+  <thead><tr><th>Old ID</th><th>Module</th><th>Status today</th></tr></thead>
+  <tbody>
+    <tr><td class="id">DEF-01</td><td>Settings</td><td>Unchanged. The entire screen still writes to <code>localStorage["reali_admin_settings"]</code> after an artificial 800 ms delay. See note 7.1.</td></tr>
+    <tr><td class="id">DEF-03</td><td>Courses</td><td>Unchanged. "New Course" still shows <em>"Course creation requires backend integration."</em> even though <code>POST /v1/courses</code> exists (<code>courses.js:182</code>).</td></tr>
+    <tr><td class="id">DEF-05</td><td>Upload / RAG</td><td>Unchanged and less honest — see the regression note below.</td></tr>
+    <tr><td class="id">DEF-06</td><td>Student Profile</td><td>Worse. Was "2 Enrolled" against 1 elsewhere; now reads <strong>"39 Enrolled"</strong> for a one-course student.</td></tr>
+    <tr><td class="id">DEF-08</td><td>Calendar</td><td>Unchanged. Blank-title save still does nothing at all — no request, no message, modal stays open.</td></tr>
+    <tr><td class="id">DEF-09</td><td>Command Chat</td><td>Worse. See the regression note below.</td></tr>
+    <tr><td class="id">DEF-10</td><td>Command Chat</td><td>Unchanged, and now also affects Study Chat. Enter does not send in either; only the button works. Verified twice per screen with focus confirmed on the input.</td></tr>
+    <tr><td class="id">DEF-14</td><td>Student Calendar</td><td>Unchanged, and there is now a second instance. Both calendars read <strong>"Live Classs"</strong> and <strong>"Quizs"</strong>. See note 7.6.</td></tr>
+  </tbody>
+</table>
+
+<h3>Regressed (4 old defects got worse, plus 9 new ones)</h3>
+<table>
+  <thead><tr><th>Old ID</th><th>Then</th><th>Now</th></tr></thead>
+  <tbody>
+    <tr><td class="id">DEF-04</td><td>Calendar events <em>were</em> created and rendered on the grid; only the "Upcoming" sidebar was wrong</td><td>Custom events <strong>cannot be created at all</strong>. Every attempt returns HTTP 400. Severity Medium → High.</td></tr>
+    <tr><td class="id">DEF-05</td><td>Zero files → "OPERATION SUCCESSFUL" with honest zeros (0 files / 0 chunks / 0 vectors)</td><td>Zero files → "OPERATION SUCCESSFUL" claiming <strong>"Processed 1 file(s), 12 chunks / Indexed 12 items"</strong> — the same figures it reports for a real upload.</td></tr>
+    <tr><td class="id">DEF-09</td><td>The assistant answered but admitted it had no platform data</td><td>It no longer answers at all. Every message returns the fixed string <em>"Administrative task scheduled."</em> from a handler that ignores its input. See note 7.4.</td></tr>
+    <tr><td class="id">—</td><td>Course deletion armed on first click and required a second to confirm</td><td>One click archives the course immediately, with no confirmation. See note 7.3 and section 8.</td></tr>
+  </tbody>
+</table>
+
+<h2 id="s3">3. Note on personas</h2>
+
+<p>The situation is unchanged from the previous report: <strong>two real personas, not three.</strong></p>
+
+<p>Registration is at <code>/login?register=true</code> and offers exactly three fields — Full Name, Email, Password. There is no role picker, and <code>POST /v1/auth/register</code> returned <code>role: "student"</code> for the account created during this run. On the admin side, the Students screen can move a user between student and admin and offers no third option. <code>/instructor</code> is not a route.</p>
+
+<p>"Instructor" survives in three places, none of them an account you can sign in to:</p>
+<ul>
+  <li>The database <em>does</em> support it — <code>users.role CHECK (role IN ('student','instructor','admin'))</code> — and the seed file creates <code>instructor@local.test</code>. This is a change from September: the role is now real at the data layer, just unreachable from the UI.</li>
+  <li>The live-session header labels the host <em>"Role: Instructor / Moderator"</em>.</li>
+  <li>Course pages show the instructor's real user name (now <em>"Local Instructor"</em>, previously the hardcoded <em>"Dr. Ahmed Hassan"</em>) — an improvement, but still display-only.</li>
+</ul>
+
+<p class="note">A consequence worth flagging: the admin dashboard's user breakdown reads <em>"6 students · 1 admins"</em> under a tile that says <code>8 TOTAL USERS</code>. The missing one is the instructor. See DEF-17.</p>
+
+<h2 id="s4">4. Defect log</h2>
+
+<p>Twenty-four distinct defects. Severity is my judgement of how much each would obstruct a real user, not a formal score. Where a defect is carried over from the September report the old ID is shown.</p>
+
+<table>
+  <thead><tr><th>#</th><th>Module</th><th>Role</th><th>Sev.</th><th>Summary</th></tr></thead>
+  <tbody>
+    <tr><td class="id">DEF-01</td><td>Assessments</td><td>Student</td><td><span class="sev s-crit">Crit</span></td><td>An empty submission is auto-graded 100%. The submit page has no input fields; posting <code>{answers:{},files:[]}</code> stores <code>grading_status:"graded"</code>, <code>grading_score:"100.00"</code>. <span class="note">Old audit item #9, now reproduced through the UI.</span></td></tr>
+    <tr><td class="id">DEF-02</td><td>Smart Quizzes</td><td>Student</td><td><span class="sev s-crit">Crit</span></td><td>The AI quiz response sends <code>correct_answer</code> and <code>correctIndex</code> for every question to the student's browser (<code>data.js:310-311</code>). The answer key is readable in the network tab. Assessments do <em>not</em> have this problem — <code>GET /v1/assessments</code> correctly strips it.</td></tr>
+    <tr><td class="id">DEF-03</td><td>Assessments</td><td>Student</td><td><span class="sev s-high">High</span></td><td>Assessments carry no <code>type</code> field, so every one routes to the assignment-upload page instead of the MCQ runner at <code>/take</code>. Students cannot answer quiz questions. Same cause makes every row badge as "TASK" and every type filter read 0.</td></tr>
+    <tr><td class="id">DEF-04</td><td>Assessments</td><td>Student</td><td><span class="sev s-high">High</span></td><td>"My Assessments" lists all 24 platform assessments as AVAILABLE to a student enrolled in one course that has none. No enrollment scoping.</td></tr>
+    <tr><td class="id">DEF-05</td><td>Student stats</td><td>Student</td><td><span class="sev s-high">High</span></td><td>Profile "39 Enrolled", Dashboard "39 ACTIVE COURSES", Performance "39 COURSES ENROLLED / 0/0 LESSONS / grade F" for a student with 1 enrollment. <code>GET /v1/users/:id</code> already returns the correct <code>enrolled_courses</code>. <span class="note">Old DEF-06, worse.</span></td></tr>
+    <tr><td class="id">DEF-06</td><td>Dashboard</td><td>Student</td><td><span class="sev s-high">High</span></td><td>"Continue Learning" shows a course the student just completed at 100% as <strong>0%</strong>, and lists 4 unenrolled courses. The API returns <code>progress: 100</code>.</td></tr>
+    <tr><td class="id">DEF-07</td><td>Students</td><td>Admin</td><td><span class="sev s-high">High</span></td><td>Promote/Demote controls render only when the signed-in admin's email equals the hardcoded <code>goharhany@gmail.com</code> (2 chunks). The API needs only <code>requireRoles('admin')</code>, so the gate is cosmetic and blocks every other admin. A-STU-01/02 could not be run.</td></tr>
+    <tr><td class="id">DEF-08</td><td>Courses</td><td>Admin</td><td><span class="sev s-high">High</span></td><td>The trash icon archives a course on the <em>first</em> click — no confirmation, no undo. Previously it armed red and required a second click. <span class="note">Regression; see section 8.</span></td></tr>
+    <tr><td class="id">DEF-09</td><td>Settings</td><td>Admin</td><td><span class="sev s-high">High</span></td><td>The whole System Settings screen writes to <code>localStorage</code> and reports <em>"System configuration updated and deployed"</em>. Maintenance Mode, 2FA, Stripe and Zoom keys included. Zero requests, zero backend routes. <span class="note">Old DEF-01.</span></td></tr>
+    <tr><td class="id">DEF-10</td><td>Calendar</td><td>Admin</td><td><span class="sev s-high">High</span></td><td>Custom event creation always fails. The client posts <code>{title,date,time}</code>; <code>events.js:99</code> requires <code>startsAt</code> → HTTP 400. It also posts twice, to <code>/v1/calendar/events</code> then <code>/v1/events</code>, which would have duplicated any event that succeeded. <span class="note">Old DEF-04, regressed.</span></td></tr>
+    <tr><td class="id">DEF-11</td><td>Upload / RAG</td><td>Admin</td><td><span class="sev s-med">Med</span></td><td>Running the pipeline with zero files reports <em>"OPERATION SUCCESSFUL — Processed 1 file(s), 12 chunks / Indexed 12 items"</em>. Both endpoints return hardcoded <code>1</code> and <code>12</code> regardless of input, so a real one-file upload produces identical numbers. <span class="note">Old DEF-05.</span></td></tr>
+    <tr><td class="id">DEF-12</td><td>Command Chat</td><td>Admin</td><td><span class="sev s-med">Med</span></td><td>Not connected to anything. <code>POST /v1/admin/task/create</code> (<code>data.js:396-402</code>) ignores the body and returns a fabricated <code>task_id</code> plus the constant <em>"Administrative task scheduled."</em> Nothing is persisted; the "Execution Logs" panel stays at <em>NO ACTIVE TASKS</em>. <span class="note">Old DEF-09, regressed.</span></td></tr>
+    <tr><td class="id">DEF-13</td><td>Assessments</td><td>Admin</td><td><span class="sev s-med">Med</span></td><td>Publishing with course "General (All Courses)" shows <em>"Assessment published!"</em>, redirects, renders <code>UNHANDLED PROMISE: Error: Invalid identifier syntax.</code> in the page, and creates nothing. Total stays at 23.</td></tr>
+    <tr><td class="id">DEF-14</td><td>Data Manager</td><td>Admin</td><td><span class="sev s-med">Med</span></td><td>Inject Record rejects any COURSE value that is not the literal <code>Global</code> or a UUID (<code>admin.js:78</code>), with the opaque message <em>"Invalid identifier syntax."</em> The field is free text and the UI never says this.</td></tr>
+    <tr><td class="id">DEF-15</td><td>Data Manager</td><td>Admin</td><td><span class="sev s-med">Med</span></td><td>Five of the six Add-form fields are silently discarded. Sending <code>Exam / Critical / draft / false</code> stored <code>Global Directive / Normal / active / true</code> — which is why all 22 rows look identical.</td></tr>
+    <tr><td class="id">DEF-16</td><td>Assessments</td><td>Both</td><td><span class="sev s-med">Med</span></td><td>Deep-linking to or refreshing any assessment page shows <em>"Assessment Not Found"</em>. The page looks the record up in an in-memory store that only the list view populates; there is no direct fetch and no loading state. Only in-app navigation works.</td></tr>
+    <tr><td class="id">DEF-17</td><td>Course selectors</td><td>Both</td><td><span class="sev s-med">Med</span></td><td>Every course picker renders raw UUIDs instead of titles — Create Assessment (step 1 and the step 4 review), RAG Pipeline target course, Study Chat header, Smart Quizzes, and the dashboard "Continue Learning" cards. 39 unreadable options.</td></tr>
+    <tr><td class="id">DEF-18</td><td>Courses</td><td>Admin</td><td><span class="sev s-med">Med</span></td><td>"+ New Course" still shows <em>"Course creation requires backend integration"</em> though <code>POST /v1/courses</code> is implemented. <span class="note">Old DEF-03.</span></td></tr>
+    <tr><td class="id">DEF-19</td><td>Calendar</td><td>Admin</td><td><span class="sev s-low">Low</span></td><td>Blank-title save is a silent no-op — no request, no message, no <code>required</code> attribute on any field. <span class="note">Old DEF-08.</span></td></tr>
+    <tr><td class="id">DEF-20</td><td>Dashboard</td><td>Student</td><td><span class="sev s-low">Low</span></td><td>Every "Pending Quizzes" card reads <em>"Quiz undefined"</em> above a raw course UUID. The list is built from courses, not assessments, reading a field the API does not return.</td></tr>
+    <tr><td class="id">DEF-21</td><td>Course detail</td><td>Student</td><td><span class="sev s-low">Low</span></td><td>The public course page renders <code>$undefined</code> as the price, <em>"· h total"</em> with no number, and <em>"( reviews)"</em> with no count — while "THIS COURSE INCLUDES" claims "2 hours of content" for a single 15-minute lesson.</td></tr>
+    <tr><td class="id">DEF-22</td><td>Live classes</td><td>Student</td><td><span class="sev s-low">Low</span></td><td>The 403 guard's "Return to Student Portal" link points at <code>/student/dashboard</code>, which is a 404. The other recovery link works.</td></tr>
+    <tr><td class="id">DEF-23</td><td>Cosmetic / a11y</td><td>Both</td><td><span class="sev s-low">Low</span></td><td>Filter labels <em>"Quizs"</em> and <em>"Live Classs"</em> on both calendars; the student meetings counters all read 0 while 6 rows render (two labelled LIVE NOW); the results page reads <em>"Your was submitted on —."</em>; profile saves succeed with no confirmation toast; Data Manager's icon buttons have no <code>title</code> or <code>aria-label</code>. <span class="note">Includes old DEF-14.</span></td></tr>
+    <tr><td class="id">DEF-24</td><td>Auth / sessions</td><td>Both</td><td><span class="sev s-low">Low</span></td><td><code>localStorage["reali_user"]</code> keeps the previous user's identity (email <em>and</em> role) after logout and after registering a new account. Not exploitable — the app re-derives the role from <code>/v1/auth/me</code> and renders no admin links — but it is stale personal data left behind. Separately, two sessions have been stuck in <code>live</code> since 21 September with no timeout, and <code>/admin/live</code> always attaches to an existing live room, so no new broadcast can be started from the studio.</td></tr>
+  </tbody>
+</table>
+
+<h2 id="s5">5. Test case log — Admin</h2>
+
+<h3>Dashboard</h3>
+<table>
+  <thead><tr><th style="width:88px">ID</th><th>Steps</th><th>Expected</th><th>Actual</th><th style="width:74px">Result</th></tr></thead>
+  <tbody>
+    <tr><td class="id">A-DASH-01</td><td>Log in as Admin, view Dashboard</td><td>Total Users tile shows real current counts</td><td>Correct on first load: <code>8 TOTAL USERS</code>, <code>39 ACTIVE PROJECTS</code>, <code>21 GUIDELINES</code>, AI AGENTS Online. But the breakdown reads "6 students · 1 admins" — 6+1≠8; the instructor is omitted (DEF-23/7.5). The 21 vs Data Manager's 22 is <em>correct</em>: 21 active + 1 draft.</td><td><span class="badge b-pass">Pass</span></td></tr>
+  </tbody>
+</table>
+
+<h3>Live Studio &amp; Meetings</h3>
+<table>
+  <thead><tr><th style="width:88px">ID</th><th>Steps</th><th>Expected</th><th>Actual</th><th style="width:74px">Result</th></tr></thead>
+  <tbody>
+    <tr><td class="id">A-LIVE-01</td><td>Launch a broadcast and verify the room</td><td>Live session opens with host controls and a working room</td><td>Full moderator room: Attendance Log, Invite Link, End Lecture, Broadcast Live Poll, Mute All, "Lobby Waiting Room: ENABLED". Script proof: <code>{overlayPresent:false, iframeCount:1, iframeSrc:"https://meet.jit.si/room-27a2286a#…startWithAudioMuted=true", hasForbidden:false}</code>. The old 403 guard is gone.</td><td><span class="badge b-pass">Pass</span></td></tr>
+    <tr><td class="id">A-LIVE-02</td><td>Launch with the title left at its placeholder default</td><td>Prompted for a real title, or accepted safely</td><td>The pre-launch form no longer exists — the string "Launch Broadcast" appears nowhere in the bundle, and <code>/admin/live</code> now attaches directly to a live session. Broadcasts are launched from Manage Meetings instead, where a title is mandatory (A-MEET-02). The risk the old test probed is structurally prevented, but the scenario itself is no longer reachable.</td><td><span class="badge b-block">Not run</span></td></tr>
+    <tr><td class="id">A-LIVE-03</td><td>Click "End Lecture" on a live session</td><td>Session ends with a confirmation and reverts</td><td>Native <code>confirm()</code>, then a real toast and redirect to Manage Meetings. API confirms <code>status:"ended"</code> with a genuine <code>aiSummary</code> generated from the session content. Reproduced twice this run.</td><td><span class="badge b-pass">Pass</span></td></tr>
+    <tr><td class="id">A-MEET-01</td><td>Schedule Session → fill Title and Date/Time → Create</td><td>New row appears, counters update</td><td>"QA Revalidation Session 0925" appeared immediately; rows 5→6; API confirms persistence. Later launched successfully from its row.</td><td><span class="badge b-pass">Pass</span></td></tr>
+    <tr><td class="id">A-MEET-02</td><td>Submit with Title and Date blank</td><td>Blocked with a message</td><td><code>{titleInvalid:true, dateInvalid:true, modalStillOpen:true}</code>, rows unchanged — native HTML5 validation.</td><td><span class="badge b-pass">Pass</span></td></tr>
+  </tbody>
+</table>
+
+<h3>Students</h3>
+<table>
+  <thead><tr><th style="width:88px">ID</th><th>Steps</th><th>Expected</th><th>Actual</th><th style="width:74px">Result</th></tr></thead>
+  <tbody>
+    <tr><td class="id">A-STU-01</td><td>Search a student, click Promote</td><td>Role updates to Admin, counts adjust</td><td>No Promote control exists. List rows offer only a view icon; the Student Dossier shows no role control. Source: buttons gated by <code>oe &amp;&amp; N.email !== j</code> where <code>oe = p?.email === j</code> and <code>j = 'goharhany@gmail.com'</code> — confirmed present in exactly 2 chunks. <code>PUT /v1/users/{id}/role</code> as <code>admin@local.test</code> returned <strong>200</strong>, so the server permits what the UI hides (DEF-07).</td><td><span class="badge b-block">Blocked</span></td></tr>
+    <tr><td class="id">A-STU-02</td><td>Click Demote on the same account</td><td>Role reverts, counts restore</td><td>Same gate. The role change was performed by direct API call instead and reverted to <code>student</code>.</td><td><span class="badge b-block">Blocked</span></td></tr>
+  </tbody>
+</table>
+
+<h3>Courses</h3>
+<table>
+  <thead><tr><th style="width:88px">ID</th><th>Steps</th><th>Expected</th><th>Actual</th><th style="width:74px">Result</th></tr></thead>
+  <tbody>
+    <tr><td class="id">A-CRS-01</td><td>Click "+ New Course"</td><td>Course-creation form opens</td><td><em>"Course creation requires backend integration."</em> — no form. <code>POST /v1/courses</code> exists at <code>courses.js:182</code> (DEF-18).</td><td><span class="badge b-fail">Fail</span></td></tr>
+    <tr><td class="id">A-CRS-02</td><td>Open a course; check Overview / Curriculum Builder / Students</td><td>Editable, populated fields</td><td>All three tabs populated and editable; 8 fields; "• 1 Lessons" matches the API. Note the list row for the same course reads "0 MODULES".</td><td><span class="badge b-pass">Pass</span></td></tr>
+    <tr><td class="id">A-CRS-03</td><td>Click the trash icon once</td><td>Confirmation step before deleting</td><td>The course was archived on the first click — no arming, no confirmation, no undo. A second click on the next row archived that one too. Total 39→37. Both were restored by direct SQL afterwards (section 8). <strong>Regression</strong> (DEF-08).</td><td><span class="badge b-fail">Fail</span></td></tr>
+  </tbody>
+</table>
+
+<h3>Assessments</h3>
+<table>
+  <thead><tr><th style="width:88px">ID</th><th>Steps</th><th>Expected</th><th>Actual</th><th style="width:74px">Result</th></tr></thead>
+  <tbody>
+    <tr><td class="id">A-ASM-01</td><td>Run the 4-step wizard and publish</td><td>Quiz created and published</td><td>Depends entirely on the course field. With "General (All Courses)": toast <em>"Assessment published!"</em>, redirect, <code>UNHANDLED PROMISE: Invalid identifier syntax</code> rendered in the page, <strong>nothing created</strong> (Total stayed 23). Retested with a real course UUID: 23→24, <code>status:"published"</code>, no error (DEF-13).</td><td><span class="badge b-part">Partial</span></td></tr>
+    <tr><td class="id">A-ASM-02</td><td>Advance step 1 with Title blank</td><td>Blocked with a message</td><td>Toast <em>"Title is required"</em>; stays on Step 1 of 4.</td><td><span class="badge b-pass">Pass</span></td></tr>
+    <tr><td class="id">A-ASM-03</td><td>Advance step 3 with only 2 of 4 MCQ options filled</td><td>Blocked with a message</td><td>Toast <em>"Question 1 has empty options"</em>; stays on Step 3.</td><td><span class="badge b-pass">Pass</span></td></tr>
+  </tbody>
+</table>
+
+<h3>Calendar</h3>
+<table>
+  <thead><tr><th style="width:88px">ID</th><th>Steps</th><th>Expected</th><th>Actual</th><th style="width:74px">Result</th></tr></thead>
+  <tbody>
+    <tr><td class="id">A-CAL-01</td><td>Schedule Custom Event with a title, Save</td><td>Event created, visible in grid and sidebar</td><td>Not created anywhere. Captured: <code>POST /v1/calendar/events</code> → <strong>400</strong> <code>{"error":{"code":"INVALID_INPUT","message":"Title and startsAt are required."}}</code>, then an identical second POST to <code>/v1/events</code>. Toast: <em>"Failed to create event"</em>. Request body was <code>{title,description,date,time,type:'custom'}</code> — no <code>startsAt</code> (DEF-10).</td><td><span class="badge b-fail">Fail</span></td></tr>
+    <tr><td class="id">A-CAL-02</td><td>Save with the title left blank</td><td>Blocked with a message</td><td>Nothing at all: <code>{modalStillOpen:true, msgs:[], netCalls:0}</code>. No field carries <code>required</code> (DEF-19).</td><td><span class="badge b-fail">Fail</span></td></tr>
+  </tbody>
+</table>
+
+<h3>Analytics</h3>
+<table>
+  <thead><tr><th style="width:88px">ID</th><th>Steps</th><th>Expected</th><th>Actual</th><th style="width:74px">Result</th></tr></thead>
+  <tbody>
+    <tr><td class="id">A-ANL-01</td><td>Compare Total Students to the Students module</td><td>Figures agree across modules</td><td>6 in Analytics, <code>byRole {student:6, instructor:1, admin:1}</code> from <code>/v1/users</code> — consistent. ACTIVE COURSES 39 also matches. Caveat: Analytics shows <em>"QUIZZES TAKEN 0 / AVG. SCORE 0%"</em> while <code>/v1/analytics/kpis</code> returns <code>assessmentAvg:100</code> — two different sources, and the 100 comes from DEF-01.</td><td><span class="badge b-pass">Pass</span></td></tr>
+  </tbody>
+</table>
+
+<h3>Command Chat</h3>
+<table>
+  <thead><tr><th style="width:88px">ID</th><th>Steps</th><th>Expected</th><th>Actual</th><th style="width:74px">Result</th></tr></thead>
+  <tbody>
+    <tr><td class="id">A-CHAT-01</td><td>Ask "How many students are enrolled right now?"</td><td>Accurate answer using real platform data</td><td>Instant reply: <em>"Administrative task scheduled."</em> Captured request <code>POST /v1/admin/task/create</code> with <code>{"request":"…","session_id":null}</code> → 200. The handler (<code>data.js:396-402</code>) never reads the body, calls no model, writes nothing, and invents <code>task-b8958278</code>. "Execution Logs" stayed at <em>System Idle / NO ACTIVE TASKS</em> (DEF-12).</td><td><span class="badge b-fail">Fail</span></td></tr>
+    <tr><td class="id">A-CHAT-02</td><td>Type a message, press Enter</td><td>Message sends</td><td>Nothing. Verified with <code>document.activeElement === input</code>, value intact, one form on the page. Control test immediately after — same value, clicked the submit button — sent the POST and cleared the box (DEF-23).</td><td><span class="badge b-fail">Fail</span></td></tr>
+    <tr><td class="id">A-CHAT-03</td><td>Click send with an empty box</td><td>No-op</td><td>Better than a no-op: the submit button is <code>disabled</code> while the input is empty and enables on typing.</td><td><span class="badge b-pass">Pass</span></td></tr>
+  </tbody>
+</table>
+
+<h3>Data Manager</h3>
+<table>
+  <thead><tr><th style="width:88px">ID</th><th>Steps</th><th>Expected</th><th>Actual</th><th style="width:74px">Result</th></tr></thead>
+  <tbody>
+    <tr><td class="id">A-DATA-01</td><td>Add tab → fill Description + Course → Inject Record</td><td>New row created, count increments</td><td>With COURSE = "General": <strong>400</strong> <code>INVALID_SYNTAX "Invalid identifier syntax."</code>, nothing created. With COURSE = "Global": 201, count 21→22, row present. Only that one magic string works, and the UI never mentions it (DEF-14). Separately, <code>Exam / Critical / draft / false</code> were sent and <code>Global Directive / Normal / active / true</code> were stored (DEF-15).</td><td><span class="badge b-part">Partial</span></td></tr>
+    <tr><td class="id">A-DATA-02</td><td>Click Inject Record with fields blank</td><td>Blocked with a message</td><td><em>"Add failed: Guideline directive/content is required."</em> — the backend 400 surfaced verbatim. Count unchanged. <strong>Old DEF-11 fixed.</strong></td><td><span class="badge b-pass">Pass</span></td></tr>
+    <tr><td class="id">A-DATA-03</td><td>Try to edit or delete a Project/Asset record</td><td>Either allowed, or clearly refused</td><td>Now allowed — both rows carry edit and delete icons wired to <code>DELETE /data/projects/:id</code> and <code>/data/assets/:id</code> (<code>data.js:53,88</code>). The old "Only guidelines are editable" refusal is gone from the bundle. I did <strong>not</strong> click delete on a project: A-CRS-03 proved these fire immediately with no confirmation, and the project rows are real courses. Both icons lack <code>title</code> and <code>aria-label</code>.</td><td><span class="badge b-pass">Pass</span></td></tr>
+  </tbody>
+</table>
+
+<h3>Upload Files (RAG pipeline)</h3>
+<table>
+  <thead><tr><th style="width:88px">ID</th><th>Steps</th><th>Expected</th><th>Actual</th><th style="width:74px">Result</th></tr></thead>
+  <tbody>
+    <tr><td class="id">A-UPL-01</td><td>Select a course, attach no files, click Initialize Pipeline</td><td>Blocked: "select at least one file"</td><td><em>"OPERATION SUCCESSFUL — FILES PROCESSED 1, CHUNKS EXTRACTED 12, VECTORS INDEXED 12"</em>, plus toasts <em>"Processed 1 file(s), 12 chunks"</em> and <em>"Indexed 12 items to vector DB"</em>. Two real requests fire — <code>POST /v1/courses/{id}/ai/materials</code> and <code>POST /v1/nlp/index/push/{id}</code> — and both return hardcoded <code>1</code> and <code>12</code> (DEF-11).</td><td><span class="badge b-fail">Fail</span></td></tr>
+    <tr><td class="id">A-UPL-02</td><td>Attach a real .txt file, Upload, run the pipeline</td><td>File processed, chunked, indexed</td><td>The upload half genuinely works: <code>POST /v1/data/upload/{courseId}</code> → 200 with a real <code>file_id</code>, stored as <code>document_1790433250931_qa-upload-sample.txt</code>, and TARGETED PROCESSING went 0→1. The processing half is indistinguishable from the empty run — the same <code>1 / 12 / 12</code>. The TARGETED PROCESSING button itself made no request when clicked. <em>"GLOBAL REPROCESS (WIPE &amp; REBUILD)"</em> was not clicked.</td><td><span class="badge b-part">Partial</span></td></tr>
+  </tbody>
+</table>
+
+<h3>Guidelines, Profile, Settings</h3>
+<table>
+  <thead><tr><th style="width:88px">ID</th><th>Steps</th><th>Expected</th><th>Actual</th><th style="width:74px">Result</th></tr></thead>
+  <tbody>
+    <tr><td class="id">A-GUID-01</td><td>Compare the Guidelines page to Data Manager's Guidelines tab</td><td>Same records in both places</td><td>22 in both, including the record injected during this run (verified by a unique marker string) — via <code>GET /v1/admin/guidelines</code>.</td><td><span class="badge b-pass">Pass</span></td></tr>
+    <tr><td class="id">A-PROF-01</td><td>Change Full Name, Save Changes</td><td>Saves, persists across reload</td><td><code>PUT /v1/users/{id}/profile</code> → 200; header and field both updated; still correct after a hard reload. Reverted afterwards. Two nits: no success toast, and <code>localStorage["reali_user"]</code> kept the old name.</td><td><span class="badge b-pass">Pass</span></td></tr>
+    <tr><td class="id">A-PROF-02</td><td>Clear the Full Name field, Save</td><td>Blocked with a message, or rejected safely</td><td>Blocked by native validation — <em>"Please fill out this field."</em>, <code>checkValidity()===false</code>, zero requests sent. <strong>Old DEF-12 fixed.</strong></td><td><span class="badge b-pass">Pass</span></td></tr>
+    <tr><td class="id">A-SET-01</td><td>Clear Academy Name, click Deploy Configuration</td><td>Blocked, or rejected safely</td><td>Accepted. Toast <em>"System configuration updated and deployed"</em>, zero network requests, and <code>localStorage["reali_admin_settings"]</code> written with <code>academyName:""</code> alongside <code>stripeKey</code>, <code>zoomClient</code>, <code>twoFactorAuth</code> (DEF-09).</td><td><span class="badge b-fail">Fail</span></td></tr>
+    <tr><td class="id">A-SET-02</td><td>Toggle Maintenance Mode, click Deploy</td><td>A real platform effect, or a clear non-effect</td><td>Fully executed this time (previously Blocked). The toggle switched to its active state, Deploy reported success, zero requests were made, and the only change was <code>maintenanceMode:true</code> in this browser's localStorage. Navigating to the public homepage with that value set rendered the site normally — complete with the banner <strong>"SYSTEM ONLINE"</strong>. No lockout, no maintenance page, not even locally. The key is read by exactly one file, the settings page itself. State restored afterwards.</td><td><span class="badge b-fail">Fail</span></td></tr>
+  </tbody>
+</table>
+
+<h2 id="s6">6. Test case log — Student</h2>
+
+<h3>Registration &amp; Dashboard</h3>
+<table>
+  <thead><tr><th style="width:88px">ID</th><th>Steps</th><th>Expected</th><th>Actual</th><th style="width:74px">Result</th></tr></thead>
+  <tbody>
+    <tr><td class="id">S-DASH-01</td><td>Register a brand-new Student, view Dashboard</td><td>"No Enrolled Courses Yet", accurate zeroed stats</td><td>No empty state. <code>ACTIVE COURSES 39</code>, <code>PENDING 23</code>, four courses under "Continue Learning" at 0%, and every pending card labelled <em>"Quiz undefined"</em> above a raw course UUID. Registration itself worked cleanly: <code>POST /v1/auth/register</code> → 201, <code>role:"student"</code>, straight into the portal. <strong>Regression</strong> (DEF-05/06/20).</td><td><span class="badge b-fail">Fail</span></td></tr>
+  </tbody>
+</table>
+
+<h3>Course Catalogue &amp; Enrollment</h3>
+<table>
+  <thead><tr><th style="width:88px">ID</th><th>Steps</th><th>Expected</th><th>Actual</th><th style="width:74px">Result</th></tr></thead>
+  <tbody>
+    <tr><td class="id">S-CAT-01</td><td>Open a course detail page, check the Curriculum section</td><td>Shows the real curriculum</td><td>It does: <em>"Course Curriculum · Course Content · 1 lessons · Multi-Agent Coordination Patterns · 15 mins"</em>. The instructor is now the real user ("Local Instructor") rather than a hardcoded name. <strong>Old DEF-02 fixed.</strong> The same page renders <code>$undefined</code>, <em>"· h total"</em> and <em>"( reviews)"</em> (DEF-21).</td><td><span class="badge b-pass">Pass</span></td></tr>
+    <tr><td class="id">S-CAT-02</td><td>Click "Start Learning" on a free course</td><td>Enrolled, dropped into a working lesson player</td><td>Enrolled instantly (<code>enrolled:true</code>) into a working player: running clock <em>"02:14 / 15 mins"</em>, Mark as Complete, Previous/Next, Course Content sidebar 0/1. Opening an unenrolled course directly is properly gated with an <em>"Enrollment Required"</em> screen.</td><td><span class="badge b-pass">Pass</span></td></tr>
+    <tr><td class="id">S-CAT-03</td><td>Complete one lesson, check Dashboard</td><td>Active Courses and progress % reflect it</td><td>The lesson completion itself is perfect: <code>POST …/lessons/{id}/toggle</code> → 200, sidebar 0/1 → 1/1, button became "Completed", and <code>GET /v1/courses/{id}</code> returns <code>progress:100</code>. The Dashboard ignores all of it — still <code>ACTIVE COURSES 39</code> and the completed course at <strong>0%</strong>. <strong>Regression</strong> (DEF-06).</td><td><span class="badge b-fail">Fail</span></td></tr>
+  </tbody>
+</table>
+
+<h3>Live Classes</h3>
+<table>
+  <thead><tr><th style="width:88px">ID</th><th>Steps</th><th>Expected</th><th>Actual</th><th style="width:74px">Result</th></tr></thead>
+  <tbody>
+    <tr><td class="id">S-LIVE-01</td><td>Navigate to a live-meeting join URL with no session ID</td><td>Blocked with a clear message</td><td><em>"Access Restricted / Live session not found. / Error Code: 403_COURSE_ENROLLMENT_GUARD"</em> with two recovery links. One of them, "Return to Student Portal", points at <code>/student/dashboard</code> — a 404 (DEF-22).</td><td><span class="badge b-pass">Pass</span></td></tr>
+    <tr><td class="id">S-LIVE-02</td><td>Click "Study AI Lecture Notes &amp; Quiz" on a completed session</td><td>Useful AI-generated recap</td><td>Genuine output: an executive summary that accurately describes the session that was actually held, three key concepts, and an interactive review question with four options and a "Check My Answers" control.</td><td><span class="badge b-pass">Pass</span></td></tr>
+  </tbody>
+</table>
+
+<h3>My Courses &amp; Assessments</h3>
+<table>
+  <thead><tr><th style="width:88px">ID</th><th>Steps</th><th>Expected</th><th>Actual</th><th style="width:74px">Result</th></tr></thead>
+  <tbody>
+    <tr><td class="id">S-CRS-01</td><td>Open My Courses, compare to Dashboard</td><td>Course count and progress % match</td><td>My Courses is the only page that gets it right — <em>"✓ COMPLETED · Advanced AI Architectures · 100% · 1/1 Lessons"</em>, COMPLETED 1, Not Started 38. The Dashboard shows the same course at 0% and Performance shows <em>"0/0 LESSONS"</em>. Three pages, three answers (DEF-05/06).</td><td><span class="badge b-fail">Fail</span></td></tr>
+    <tr><td class="id">S-ASM-01</td><td>Open My Assessments for a course with no assessment targeting it</td><td>Only relevant assessments listed</td><td>All 24 platform assessments listed as AVAILABLE. <code>GET /v1/assessments</code> returns 24 for this student; the count targeting their one enrolled course is <strong>0</strong>. Every row is badged "TASK"; every type filter reads 0 (DEF-03/04).</td><td><span class="badge b-fail">Fail</span></td></tr>
+    <tr><td class="id">S-ASM-02</td><td>Follow a Submit link and complete the assessment</td><td>The student can answer and submit</td><td>The item appears immediately, so that half works. But every Submit link opens <em>StudentAssignmentSubmit</em> — a page with <strong>no input fields at all</strong> — and submitting posts <code>{answers:{},time_taken:0,files:[]}</code> and is graded <strong>100.00</strong>. The MCQ runner at <code>/take</code> is never linked, and deep-linking to either route shows "Assessment Not Found" (DEF-01/03/16).</td><td><span class="badge b-part">Partial</span></td></tr>
+  </tbody>
+</table>
+
+<h3>Calendar, Chat &amp; Quizzes</h3>
+<table>
+  <thead><tr><th style="width:88px">ID</th><th>Steps</th><th>Expected</th><th>Actual</th><th style="width:74px">Result</th></tr></thead>
+  <tbody>
+    <tr><td class="id">S-CAL-01</td><td>Look for an event-creation control</td><td>None — students are read-only here</td><td>Correct. Zero create/schedule/add controls; the page issues GETs only.</td><td><span class="badge b-pass">Pass</span></td></tr>
+    <tr><td class="id">S-CAL-02</td><td>Review filter checkbox labels</td><td>"Live Classes"</td><td>Still <strong>"Live Classs"</strong>, and also <strong>"Quizs"</strong>. Both calendars build these with <code>children:[t.label,'s']</code> over the legend labels <code>Live Class</code> / <code>Quiz</code> — confirmed in <code>AdminCalendar-CcaJ2SwU.js</code> and <code>StudentCalendar-BewWhaQB.js</code> (DEF-23).</td><td><span class="badge b-fail">Fail</span></td></tr>
+    <tr><td class="id">S-CHAT-01</td><td>Ask "What is machine learning?" scoped to the enrolled course</td><td>Accurate, on-topic answer</td><td>Accurate, well-structured, and grounded in the real course — it opens <em>"While 'Advanced AI Architectures' focuses on complex systems…"</em> and closes by tying ML back to the course's multi-agent and RAG material. <code>POST /v1/courses/{id}/ai/chat</code> → 200 in roughly ten seconds. The course selector above it shows a raw UUID, and Enter does not send (DEF-17/23).</td><td><span class="badge b-pass">Pass</span></td></tr>
+    <tr><td class="id">S-QUIZ-01</td><td>3 questions, Topic Focus blank, Generate</td><td>Blocked, with the field honestly labelled</td><td>Blocked with <em>"Please enter a topic"</em>. The <em>(Optional)</em> label is gone, and the warning stays a measured ~4 s. <strong>Old DEF-13 fixed.</strong></td><td><span class="badge b-pass">Pass</span></td></tr>
+    <tr><td class="id">S-QUIZ-02</td><td>Repeat with 5 questions on a fresh page</td><td>Same behaviour</td><td>Identical — warning present from 600 ms to 3600 ms, generation blocked.</td><td><span class="badge b-pass">Pass</span></td></tr>
+    <tr><td class="id">S-QUIZ-03</td><td>Fill Topic Focus with "Neural Networks", Generate</td><td>Quiz generates</td><td><code>POST /v1/courses/{id}/ai/quizzes</code> → 201 with a real 5-question MCQ set. On-topic first question about non-linear activation functions, working countdown from 10:00, live "0 Correct" tracker, Question 1/5. Caveat: the response includes <code>correct_answer</code> and <code>correctIndex</code> (DEF-02).</td><td><span class="badge b-pass">Pass</span></td></tr>
+  </tbody>
+</table>
+
+<h3>Performance &amp; Profile</h3>
+<table>
+  <thead><tr><th style="width:88px">ID</th><th>Steps</th><th>Expected</th><th>Actual</th><th style="width:74px">Result</th></tr></thead>
+  <tbody>
+    <tr><td class="id">S-PERF-01</td><td>Open Performance Report, compare to Dashboard / My Courses</td><td>Figures match</td><td><em>"39 COURSES ENROLLED"</em>, each listed as <em>"0/0 LESSONS · 0%"</em>, overall grade <strong>F</strong>, <em>"23 Quiz(es) Assigned"</em> (the API returns 24). My Courses says 1 completed at 100% for the same student, and <code>GET /v1/users/:id</code> confirms <code>enrolled_courses</code> has 1 entry and <code>completed_lessons</code> has 1. <strong>Regression</strong> (DEF-05).</td><td><span class="badge b-fail">Fail</span></td></tr>
+    <tr><td class="id">S-PROF-01</td><td>Check "Courses Enrolled" in Academic Overview</td><td>"1 Enrolled"</td><td><strong>"39 Enrolled"</strong>, alongside <em>"Quizzes 0 Completed"</em> — this after the student completed one assessment. The old defect read 2 against 1; it now reads 39 against 1 (DEF-05).</td><td><span class="badge b-fail">Fail</span></td></tr>
+    <tr><td class="id">S-PROF-02</td><td>Enter mismatched New/Confirm password, Save</td><td>Blocked with a message</td><td>Toast <em>"New passwords do not match"</em>; no request sent.</td><td><span class="badge b-pass">Pass</span></td></tr>
+    <tr><td class="id">S-PROF-03</td><td>Change Full Name, Save Changes</td><td>Saves, persists</td><td><code>PUT /v1/users/{id}/profile</code> → 200; header and API both updated. Reverted afterwards. Email is correctly locked with an explanatory message. No success toast.</td><td><span class="badge b-pass">Pass</span></td></tr>
+  </tbody>
+</table>
+
+<h2 id="s7">7. Verification notes</h2>
+
+<p>Results below were established by reading the deployed source or calling the API directly, not by observation alone.</p>
+
+<h3>7.1 — DEF-09, Settings: confirmed inert end to end</h3>
+<p>The save path writes <code>localStorage["reali_admin_settings"]</code> after an artificial 800 ms delay. The full stored object is <code>{academyName, supportEmail, language, aiEnabled, aiModel:"gpt-4", aiPersonality, maintenanceMode, restrictEnrollment, twoFactorAuth, stripeKey, zoomClient}</code>. Two independent confirmations that nothing consumes it:</p>
+<ul>
+  <li><code>reali_admin_settings</code>, <code>academyName</code> and <code>maintenanceMode</code> each appear in <strong>exactly one</strong> file in the entire bundle — <code>AdminSettings-DXNQs0ms.js</code>, the settings page itself.</li>
+  <li>There are <strong>no</strong> settings routes anywhere in <code>backend/routes/*.js</code>.</li>
+</ul>
+<p>The <code>aiModel:"gpt-4"</code> default is also misleading: the backend hardcodes <code>qwen/qwen3.8-27b</code> at three call sites (<code>data.js:217</code>, <code>data.js:291</code>, <code>meetings.js:547</code>), so the field cannot select a model even in principle.</p>
+
+<h3>7.2 — DEF-10, Calendar: a request-contract mismatch</h3>
+<p>The client sends <code>{title, description, date, time, type:'custom'}</code>. <code>events.js:99-101</code> requires <code>startsAt</code> and rejects everything else with <em>"Title and startsAt are required."</em> No custom event can be created from the UI. The client then retries against a second endpoint (<code>/v1/events</code>), so a future fix to the payload would create each event twice.</p>
+<p>The "Upcoming Custom Events" sidebar is separately unfixable as written: it filters on <code>new Date(e.date) &gt;= new Date</code>, but the backend's <code>formatEvent</code> returns <code>startDate</code>/<code>startsAt</code> and no <code>date</code> field, so the predicate can never match.</p>
+
+<h3>7.3 — DEF-08, Course deletion: no confirmation exists</h3>
+<p>Observed directly, at cost: a single click on the row's trash icon archived the course, and the catalogue count fell 39→37 across two clicks. There is no armed state, no second click, no dialog and no undo. <code>DELETE /data/projects/:id</code> applies <code>requireRoles('instructor','admin')</code> and then archives by ID with no owner comparison (<code>data.js:52-56</code>), unlike the correct owner check in <code>courses.js:262</code>. Both affected courses were restored — see section 8.</p>
+
+<h3>7.4 — DEF-12, Command Chat: the handler in full</h3>
+<pre><code>// backend/routes/data.js:396-402
+router.post('/admin/task/create', authenticate, requireRoles('admin'), async (req, res) =&gt; {
+  res.json({
+    status: 'success',
+    task_id: `task-${crypto.randomUUID().slice(0, 8)}`,
+    message: 'Administrative task scheduled.'
+  });
+});</code></pre>
+<p>The request body is never read. There is no model call, no database write and no queue — the <code>task_id</code> is random and refers to nothing. This is a different and worse situation than September, where the assistant at least produced a conversational reply.</p>
+
+<h3>7.5 — DEF-05, the correct data is already available</h3>
+<p><code>GET /v1/users/:id</code> for the test student returns:</p>
+<pre><code>{ enrolled_courses: ["61275778-…"],   // exactly 1
+  completed_lessons: ["639a785b-…"],  // exactly 1
+  completed_tasks:   [ … 1 ] }</code></pre>
+<p>The same endpoint correctly returns <strong>403</strong> for another user's profile (<em>"You do not have permission to view this profile."</em>) and for <code>GET /v1/users</code> (<em>"requires one of [instructor, admin]"</em>). So authorization here is sound; the student pages simply call <code>GET /data/projects</code> instead, which returns the entire non-archived catalogue (<code>data.js:14</code>, its <code>_req</code> parameter unused). That one substitution explains S-DASH-01, S-CAT-03, S-CRS-01, S-PERF-01 and S-PROF-01.</p>
+
+<h3>7.6 — DEF-23, the calendar typos are generated, not typed</h3>
+<p>The literal string "Live Classs" does not exist in the bundle. <code>CalendarWidget-BdaSh5Da.js</code> defines a legend including <code>meeting:{label:'Live Class'}</code> and <code>quiz:{label:'Quiz'}</code>, and both calendar pages render <code>children:[t.label,'s']</code>. Naive pluralization produces "Live Classs" and "Quizs". Fixing it means pluralizing properly, not editing a string.</p>
+
+<h3>7.7 — DEF-02 vs assessments: an important distinction</h3>
+<p>The answer-key leak is specific to the AI quiz endpoint. <code>GET /v1/assessments</code> was checked live and returns questions with keys <code>[id, text, prompt, type, options, marks, points, rubric]</code> — <strong>no</strong> correct-answer field, matching the stripping at <code>assessments.js:270</code>. The AI quiz path (<code>data.js:310-311</code>) does the opposite and includes <code>correct_answer</code> and <code>correctIndex</code> in the 201 response the browser receives.</p>
+
+<h3>7.8 — DEF-03, the routing logic</h3>
+<p>From <code>StudentAssessments-Cz9py94q.js</code>:</p>
+<pre><code>j = e =&gt; e.submission ? `/student/assessments/${e.id}/results`
+        : e.timeInfo?.expired || !e.isStarted ? null
+        : e.type === 'quiz' || e.type === 'exam' ? `/student/assessments/${e.id}/take`
+        : `/student/assessments/${e.id}/submit`   // ← every record lands here</code></pre>
+<p>The branch depends on <code>e.type</code>, which the API never returns (confirmed: the field is absent from <code>GET /v1/assessments</code> and there is no <code>type</code> column on the <code>assessments</code> table in <code>schema.sql</code>). The same undefined value is why the filter <code>e.type === f</code> matches nothing, so Quizzes / Exams / Assignments / Tasks all read 0 on both the admin and student screens while All reads 24, and why every row is badged "TASK".</p>
+
+<h2 id="s8">8. Side effects of this test run</h2>
+
+<p>Recorded for transparency. Everything here is on a local development database.</p>
+
+<table>
+  <thead><tr><th>Change</th><th>State</th></tr></thead>
+  <tbody>
+    <tr><td><strong>Two courses were archived by the unconfirmed delete control</strong> while testing A-CRS-03 (both titled "Advanced AI Architectures": <code>7a25764d…</code> and <code>61275778…</code>)</td><td><strong>Restored</strong> — <code>status='published'</code>, <code>archived_at=NULL</code>. Catalogue verified back at 39.</td></tr>
+    <tr><td>Uploaded probe files (<code>qa-probe.txt</code>, <code>qa-upload-sample.txt</code>) created real <code>data_assets</code> rows during A-UPL-02</td><td><strong>Deleted</strong> via <code>DELETE /v1/data/assets/:id</code>. Asset count verified back at 19.</td></tr>
+    <tr><td>Admin name changed to "Local Admin QA" (A-PROF-01); student name changed (S-PROF-03)</td><td><strong>Reverted</strong> and confirmed via <code>/v1/auth/me</code>.</td></tr>
+    <tr><td>User <code>tester@local.test</code> promoted to admin to prove the API does not enforce the UI's hardcoded-email gate</td><td><strong>Reverted</strong> to <code>student</code>.</td></tr>
+    <tr><td><code>localStorage["reali_admin_settings"]</code> written with a blank academy name and <code>maintenanceMode:true</code></td><td><strong>Removed</strong>; key verified absent.</td></tr>
+    <tr><td>Assessment "QA Revalidation Assessment B" published against <code>7a25764d…</code> (A-ASM-01), plus one 100% submission against it (S-ASM-02)</td><td><strong>Left in place</strong> as evidence. Total is now 24.</td></tr>
+    <tr><td>Guideline containing the marker "ZQ9" injected (A-DATA-01)</td><td><strong>Left in place</strong> as evidence. Count is now 22 (21 active + 1 draft).</td></tr>
+    <tr><td>Meeting "QA Revalidation Session 0925" created, launched and ended (A-MEET-01, A-LIVE-01/03)</td><td><strong>Left in place</strong>, status <code>ended</code> with an AI summary.</td></tr>
+    <tr><td>Test student <code>qa.fresh.1790433801573@x.test</code> registered, enrolled in one course, one lesson completed</td><td><strong>Left in place</strong> as the evidence subject for section 6.</td></tr>
+    <tr><td>Two sessions left in <code>live</code> since 21 September ("Test Live Meeting", "REAL_i Live Orientation")</td><td><strong>Not touched</strong> — pre-existing state, not created by this run. They are what makes <code>/admin/live</code> unreachable as a launch screen (DEF-24).</td></tr>
+  </tbody>
+</table>
+
+<p class="note">No destructive shell command, force push, hook bypass or configuration change was used at any point. The only direct database writes were the two-course restore above.</p>
+
+<h2 id="s9">9. Recommendations</h2>
+
+<p>Ordered by what I would fix first, not by severity label.</p>
+
+<ol>
+  <li><strong>Stop awarding 100 for an empty submission.</strong> <code>POST /assessments/:id/submit</code> (<code>assessments.js:370-386</code>) inserts <code>grading_status='graded'</code>, <code>grading_score=100</code> without evaluating an answer. The scored path already exists at <code>POST /attempts/:submissionId/submit</code> — make the fallback grade properly or reject. Until then every average on the platform, including the admin KPI, is measuring this.</li>
+
+  <li><strong>Remove the answer key from the AI quiz response.</strong> <code>data.js:310-311</code> puts <code>correct_answer</code> and <code>correctIndex</code> in the payload sent to the student. Strip them server-side and grade on submission, exactly as <code>assessments.js:270</code> already does for real assessments. This is a two-line change.</li>
+
+  <li><strong>Add a <code>type</code> to assessments.</strong> One missing field is causing four visible failures: students are routed to an assignment page instead of the quiz runner, every row reads "TASK", and all four type filters read 0 on two screens. Add the column (or derive it from <code>submission_type</code>), return it, and default it to <code>quiz</code>.</li>
+
+  <li><strong>Point the student pages at <code>enrolled_courses</code>.</strong> The correct data is already returned by <code>GET /v1/users/:id</code> and is already access-controlled. Switching the Dashboard, Profile, Performance and My Courses pages from <code>GET /data/projects</code> to that endpoint fixes five failing scenarios at once. Then make the Dashboard read real progress — the API already returns <code>progress:100</code> for the course it displays as 0%.</li>
+
+  <li><strong>Delete the hardcoded email gate on role management.</strong> <code>goharhany@gmail.com</code> in <code>AdminStudents</code> and <code>AdminStudentProfile</code> decides who sees the Promote/Demote buttons. The server already enforces <code>requireRoles('admin')</code> correctly, so the check adds no security — it only locks every other admin out of a feature they are authorised to use. Replace it with the role from the session.</li>
+
+  <li><strong>Put a confirmation back on course deletion.</strong> One click currently archives a course permanently from the admin's point of view, and the same control is reachable from Data Manager's Projects tab where the rows are bare UUIDs and the buttons have no labels. Restore the arm-then-confirm behaviour, and add the owner check that <code>courses.js:262</code> already implements but <code>data.js:52-56</code> omits.</li>
+
+  <li><strong>Fix the calendar payload, then the sidebar.</strong> Send <code>startsAt</code> (or accept <code>date</code> server-side) and drop the duplicate POST to <code>/v1/events</code>. Then change the sidebar filter to read <code>startsAt</code> — it currently tests a <code>date</code> property the API never returns, so it can never show anything. Add <code>required</code> to the title field while you are in there; blank submission is still a silent no-op.</li>
+
+  <li><strong>Either wire Settings to the backend or say plainly that it does nothing.</strong> Today an admin can enable Maintenance Mode, turn on 2FA, paste Stripe and Zoom keys, click Deploy, read "updated and deployed" — and change nothing for anyone, including themselves. That is worse than an obvious bug because it looks like it worked. If these controls are not on the roadmap, disable the screen and label it as not yet functional.</li>
+
+  <li><strong>Make the RAG counters honest.</strong> <code>data.js:156-157</code> and <code>:166</code> return constant <code>1</code> and <code>12</code> whether or not a file was attached. Return the real counts, and block the pipeline client-side when nothing is selected. The file upload itself works correctly — do not lose that while fixing the reporting.</li>
+
+  <li><strong>Give course pickers their titles back.</strong> Six screens present 39 raw UUIDs where a course name belongs, including the step-4 review an admin reads before publishing. The titles are already in the same API responses; this is a display-field substitution in the shared dropdown component.</li>
+
+  <li><strong>Fix the small contract breaks that produce fake successes.</strong> Three separate places report success while doing nothing: Create Assessment with "General (All Courses)", Inject Record with any course other than the literal "Global", and every message in Command Chat. Each is a value the backend cannot accept reaching a UI that reports success regardless. Validate on the server, surface the error, and never toast success on a failed write.</li>
+
+  <li><strong>Make Enter send, in both chats.</strong> Neither Command Chat nor Study Chat submits on Enter despite the input sitting inside a <code>&lt;form&gt;</code> with a <code>type="submit"</code> button. Verified twice per screen with focus confirmed. This is the single most-expected interaction on a chat screen.</li>
+
+  <li><strong>Then the polish pass.</strong> "Quizs" and "Live Classs" (fix the pluralization, not the string); <code>$undefined</code>, "· h total" and "( reviews)" on the course page; "Quiz undefined" cards; the dead <code>/student/dashboard</code> link on the 403 guard; "Your was submitted on —."; the missing success toast on both profile screens; <code>aria-label</code>s on the Data Manager icon buttons; clearing <code>reali_user</code> on logout; and a timeout for sessions stuck in <code>live</code>.</li>
+
+  <li><strong>Decide what "Instructor" means.</strong> The role is now real in the database and seeded, but unreachable from the product — no route, no role picker, no way to promote to it. Either surface it or stop describing three personas.</li>
+</ol>
+
+<footer>
+  <p><strong>REAL_i — QA Revalidation Report</strong> · 26 September 2026 · 49 scenarios re-executed against the PostgreSQL build at commit <code>c2e20cd</code>.</p>
+  <p>Every result in sections 5 and 6 was produced by live browser execution with network capture. Where observation alone was ambiguous, the cause was confirmed against the deployed bundle or a direct API call and is documented in section 7. Mutations made during testing are listed in section 8.</p>
+</footer>
+
+</div>
+</body>
+</html>

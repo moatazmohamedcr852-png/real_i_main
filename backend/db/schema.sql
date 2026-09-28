@@ -90,10 +90,11 @@ CREATE INDEX IF NOT EXISTS idx_enrollment_course ON enrollments(course_id, statu
 -- Assessments Table
 CREATE TABLE IF NOT EXISTS assessments (
   id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  course_id           UUID NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
+  course_id           UUID REFERENCES courses(id) ON DELETE CASCADE,
   author_id           UUID NOT NULL REFERENCES users(id),
   title               VARCHAR(200) NOT NULL,
   instructions        TEXT DEFAULT '',
+  type                VARCHAR(20) NOT NULL DEFAULT 'quiz' CHECK (type IN ('quiz', 'exam', 'assignment', 'task')),
   status              VARCHAR(20) NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'published', 'archived')),
   time_limit_seconds  INT NOT NULL DEFAULT 600 CHECK (time_limit_seconds BETWEEN 60 AND 28800),
   randomize_questions BOOLEAN NOT NULL DEFAULT true,
@@ -106,12 +107,15 @@ CREATE TABLE IF NOT EXISTS assessments (
   updated_at          TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS idx_assessments_course ON assessments(course_id, status);
+ALTER TABLE assessments ALTER COLUMN course_id DROP NOT NULL;
+ALTER TABLE assessments ADD COLUMN IF NOT EXISTS type VARCHAR(20) NOT NULL DEFAULT 'quiz';
+ALTER TABLE submissions ALTER COLUMN course_id DROP NOT NULL;
 
 -- Submissions Table
 CREATE TABLE IF NOT EXISTS submissions (
   id                   UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   student_id           UUID NOT NULL REFERENCES users(id),
-  course_id            UUID NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
+  course_id            UUID REFERENCES courses(id) ON DELETE CASCADE,
   lesson_id            UUID REFERENCES lessons(id) ON DELETE SET NULL,
   assessment_id        UUID REFERENCES assessments(id) ON DELETE SET NULL,
   kind                 VARCHAR(20) NOT NULL DEFAULT 'lesson' CHECK (kind IN ('lesson', 'assessment')),
@@ -253,7 +257,10 @@ CREATE TABLE IF NOT EXISTS ai_guidelines (
   scope        VARCHAR(10) NOT NULL DEFAULT 'global' CHECK (scope IN ('global', 'course')),
   course_id    UUID REFERENCES courses(id) ON DELETE CASCADE,
   version      INT NOT NULL DEFAULT 1,
+  task_type    VARCHAR(80) NOT NULL DEFAULT 'Global Directive',
+  priority     VARCHAR(20) NOT NULL DEFAULT 'Normal',
   status       VARCHAR(20) NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'active', 'archived')),
+  is_active    BOOLEAN NOT NULL DEFAULT false,
   content      TEXT NOT NULL,
   created_by   UUID NOT NULL REFERENCES users(id),
   activated_at TIMESTAMPTZ DEFAULT NULL,
@@ -262,6 +269,10 @@ CREATE TABLE IF NOT EXISTS ai_guidelines (
   updated_at   TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS idx_ai_guidelines_scope ON ai_guidelines(scope, course_id, status);
+ALTER TABLE ai_guidelines ADD COLUMN IF NOT EXISTS task_type VARCHAR(80) NOT NULL DEFAULT 'Global Directive';
+ALTER TABLE ai_guidelines ADD COLUMN IF NOT EXISTS priority VARCHAR(20) NOT NULL DEFAULT 'Normal';
+ALTER TABLE ai_guidelines ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT false;
+UPDATE ai_guidelines SET is_active = (status = 'active') WHERE is_active IS DISTINCT FROM (status = 'active');
 
 -- Data Assets Table
 CREATE TABLE IF NOT EXISTS data_assets (
@@ -271,10 +282,16 @@ CREATE TABLE IF NOT EXISTS data_assets (
   asset_type  VARCHAR(100) DEFAULT 'file',
   asset_size  BIGINT DEFAULT 0,
   file_path   TEXT DEFAULT NULL,
+  chunk_count INT NOT NULL DEFAULT 0,
+  processed_at TIMESTAMPTZ DEFAULT NULL,
+  indexed_at  TIMESTAMPTZ DEFAULT NULL,
   uploaded_by UUID REFERENCES users(id),
   created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS idx_data_assets_course ON data_assets(course_id);
+ALTER TABLE data_assets ADD COLUMN IF NOT EXISTS chunk_count INT NOT NULL DEFAULT 0;
+ALTER TABLE data_assets ADD COLUMN IF NOT EXISTS processed_at TIMESTAMPTZ DEFAULT NULL;
+ALTER TABLE data_assets ADD COLUMN IF NOT EXISTS indexed_at TIMESTAMPTZ DEFAULT NULL;
 
 -- Chat Sessions Table
 CREATE TABLE IF NOT EXISTS chat_sessions (
@@ -306,3 +323,32 @@ CREATE TABLE IF NOT EXISTS quiz_results (
   created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
   UNIQUE(student_id, task_id)
 );
+
+CREATE TABLE IF NOT EXISTS system_settings (
+  singleton_key       BOOLEAN PRIMARY KEY DEFAULT true CHECK (singleton_key),
+  academy_name        VARCHAR(200) NOT NULL DEFAULT 'REAL_i Academy',
+  support_email       VARCHAR(254) NOT NULL DEFAULT 'support@real-i.local',
+  language            VARCHAR(20) NOT NULL DEFAULT 'English',
+  ai_enabled          BOOLEAN NOT NULL DEFAULT true,
+  ai_model            VARCHAR(100) NOT NULL DEFAULT 'qwen/qwen3.8-27b',
+  ai_personality      VARCHAR(50) NOT NULL DEFAULT 'Professional',
+  maintenance_mode    BOOLEAN NOT NULL DEFAULT false,
+  restrict_enrollment BOOLEAN NOT NULL DEFAULT false,
+  two_factor_auth     BOOLEAN NOT NULL DEFAULT false,
+  stripe_key          TEXT DEFAULT '',
+  zoom_client         TEXT DEFAULT '',
+  updated_by          UUID REFERENCES users(id),
+  updated_at          TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+INSERT INTO system_settings (singleton_key) VALUES (true) ON CONFLICT (singleton_key) DO NOTHING;
+
+CREATE TABLE IF NOT EXISTS admin_tasks (
+  id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  requested_by  UUID NOT NULL REFERENCES users(id),
+  request       TEXT NOT NULL,
+  response      TEXT NOT NULL,
+  status        VARCHAR(20) NOT NULL DEFAULT 'completed' CHECK (status IN ('pending', 'completed', 'failed')),
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+  completed_at  TIMESTAMPTZ DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_admin_tasks_created ON admin_tasks(created_at DESC);

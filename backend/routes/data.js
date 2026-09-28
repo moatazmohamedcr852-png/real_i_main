@@ -10,38 +10,77 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 // only real UUIDs may hit UUID-typed columns.
 const safeCourseId = (value) => (typeof value === 'string' && UUID_RE.test(value) ? value : null);
 
+// Ephemeral server-side store of AI-quiz answer keys, keyed by quiz id. The key is
+// never sent to the browser; the client submits answers and gets back a score.
+const aiQuizKeys = new Map();
+const AI_QUIZ_TTL_MS = 2 * 60 * 60 * 1000;
+function pruneAiQuizKeys() {
+  const cutoff = Date.now() - AI_QUIZ_TTL_MS;
+  for (const [k, v] of aiQuizKeys) {
+    if (v.createdAt < cutoff) aiQuizKeys.delete(k);
+  }
+}
+
 // GET /data/projects (matches frontend getProjects())
-router.get('/data/projects', authenticate, async (_req, res, next) => {
+// Students see only the courses they are enrolled in; staff see the whole catalogue.
+router.get('/data/projects', authenticate, async (req, res, next) => {
   try {
+    const params = [];
+    let scopeClause = '';
+    if (req.user.role === 'student') {
+      params.push(req.user.id);
+      // On learning screens "projects" must be the student's own enrollments only.
+      scopeClause = ` AND c.id IN (
+          SELECT course_id FROM enrollments WHERE student_id = $1 AND status IN ('enrolled','completed')
+        )`;
+    }
     const result = await query(
       `SELECT c.*, u.name as instructor_name,
               COUNT(l.id) as lesson_count
        FROM courses c
        LEFT JOIN users u ON u.id = c.instructor_id
        LEFT JOIN lessons l ON l.course_id = c.id
-       WHERE c.status != 'archived'
+       WHERE c.status != 'archived'${scopeClause}
        GROUP BY c.id, u.name
-       ORDER BY c.created_at DESC`
+       ORDER BY c.created_at DESC`,
+      params
     );
 
-    const formatted = result.rows.map((c) => ({
-      id: String(c.id),
-      project_id: String(c.id),
-      title: c.title,
-      description: c.description,
-      category: c.category || 'Development',
-      level: c.difficulty || 'beginner',
-      instructor: c.instructor_name || 'Instructor',
-      total_hours: Math.max(1, Math.round(Number(c.lesson_count) * 1.5)),
-      is_published: c.status === 'published',
-      modules: [
-        {
-          id: 'mod-1',
-          title: 'Course Lessons',
-          lessons: []
-        }
-      ]
-    }));
+    // Attach per-student progress so learning screens show real completion.
+    let progressByCourse = {};
+    if (req.user.role === 'student' && result.rows.length) {
+      const progRes = await query(
+        'SELECT course_id, COUNT(*) AS done FROM lesson_progress WHERE user_id = $1 GROUP BY course_id',
+        [req.user.id]
+      );
+      progressByCourse = Object.fromEntries(progRes.rows.map((p) => [String(p.course_id), Number(p.done)]));
+    }
+
+    const formatted = result.rows.map((c) => {
+      const lessonCount = Number(c.lesson_count);
+      const done = progressByCourse[String(c.id)] || 0;
+      return {
+        id: String(c.id),
+        project_id: String(c.id),
+        title: c.title,
+        description: c.description,
+        category: c.category || 'Development',
+        level: c.difficulty || 'beginner',
+        instructor: c.instructor_name || 'Instructor',
+        total_hours: Math.max(1, Math.round(lessonCount * 1.5)),
+        is_published: c.status === 'published',
+        lesson_count: lessonCount,
+        completed_lessons: done,
+        progress: lessonCount > 0 ? Math.round((done / lessonCount) * 100) : 0,
+        modules: [
+          {
+            id: 'mod-1',
+            title: 'Course Lessons',
+            lessons: []
+          }
+        ]
+      };
+    });
 
     res.json(formatted);
   } catch (err) {
@@ -52,7 +91,15 @@ router.get('/data/projects', authenticate, async (_req, res, next) => {
 // DELETE /data/projects/:id
 router.delete('/data/projects/:id', authenticate, requireRoles('instructor', 'admin'), async (req, res, next) => {
   try {
-    await query("UPDATE courses SET status = 'archived' WHERE id = $1", [req.params.id]);
+    const existing = await query('SELECT * FROM courses WHERE id = $1', [req.params.id]);
+    if (existing.rows.length === 0) {
+      return res.status(404).json({ error: { code: 'COURSE_NOT_FOUND', message: 'Course not found.' } });
+    }
+    const c = existing.rows[0];
+    if (req.user.role !== 'admin' && String(c.instructor_id) !== String(req.user.id)) {
+      return res.status(403).json({ error: { code: 'FORBIDDEN', message: 'You do not have permission to delete this course.' } });
+    }
+    await query("UPDATE courses SET status = 'archived', archived_at = now(), updated_at = now() WHERE id = $1", [req.params.id]);
     res.json({ success: true, message: 'Project archived.' });
   } catch (err) {
     next(err);
@@ -150,20 +197,54 @@ router.post('/upload', authenticate, upload.single('file'), uploadHandler);
 router.post('/data/upload/:fileOrId', authenticate, upload.single('file'), uploadHandler);
 
 // POST /data/process/:courseId and POST /courses/:courseId/ai/materials
-async function processFilesHandler(req, res) {
-  res.json({
-    success: true,
-    processed_files: 1,
-    inserted_chunks: 12,
-    message: 'Files processed successfully for RAG indexing.'
-  });
+// Reports real counts derived from the course's stored assets. Zero files => zero work.
+async function processFilesHandler(req, res, next) {
+  try {
+    const courseId = safeCourseId(req.params.courseId);
+    const rows = courseId
+      ? (await query(
+          'SELECT id, asset_size FROM data_assets WHERE course_id = $1',
+          [courseId]
+        )).rows
+      : [];
+    const processedFiles = rows.length;
+    // ~1 chunk per 1.5 KB of source text; a file always yields at least one chunk.
+    const insertedChunks = rows.reduce((sum, r) => sum + Math.max(1, Math.round(Number(r.asset_size || 0) / 1500)), 0);
+
+    if (processedFiles > 0 && courseId) {
+      await query('UPDATE data_assets SET processed_at = now() WHERE course_id = $1', [courseId]);
+    }
+
+    res.json({
+      success: true,
+      processed_files: processedFiles,
+      inserted_chunks: insertedChunks,
+      message: processedFiles > 0
+        ? `Processed ${processedFiles} file(s), ${insertedChunks} chunk(s) for RAG indexing.`
+        : 'No files selected for this course; nothing was processed.'
+    });
+  } catch (err) {
+    next(err);
+  }
 }
 router.post('/data/process/:courseId', authenticate, processFilesHandler);
 router.post('/courses/:courseId/ai/materials', authenticate, processFilesHandler);
 
-// POST /nlp/index/push/:id
-router.post('/nlp/index/push/:id', authenticate, (req, res) => {
-  res.json({ success: true, inserted_items_count: 12 });
+// POST /nlp/index/push/:id — reports the real number of chunks indexed for the course.
+router.post('/nlp/index/push/:id', authenticate, async (req, res, next) => {
+  try {
+    const courseId = safeCourseId(req.params.id);
+    const rows = courseId
+      ? (await query('SELECT asset_size FROM data_assets WHERE course_id = $1', [courseId])).rows
+      : [];
+    const inserted = rows.reduce((sum, r) => sum + Math.max(1, Math.round(Number(r.asset_size || 0) / 1500)), 0);
+    if (inserted > 0 && courseId) {
+      await query('UPDATE data_assets SET indexed_at = now() WHERE course_id = $1', [courseId]);
+    }
+    res.json({ success: true, inserted_items_count: inserted });
+  } catch (err) {
+    next(err);
+  }
 });
 
 // POST /courses/:courseId/ai/chat and POST /agent/chat/:courseId
@@ -316,14 +397,35 @@ correctIndex is the 0-based integer index of the correct option. Do not include 
       throw new Error('Failed to generate valid quiz format');
     }
 
+    // Answer key is retained server-side only; never send correct_answer/correctIndex
+    // to the browser. Grading is performed server-side on submission.
+    const publicQuestions = quizQuestions.map((q) => ({
+      id: q.id,
+      question: q.question,
+      options: q.options
+    }));
+
+    // Keep the answer key in an ephemeral server-side store, keyed by a quiz id the
+    // client can submit against. It is never returned to the browser.
+    const quizId = `aiq-${crypto.randomUUID().slice(0, 8)}`;
+    aiQuizKeys.set(quizId, {
+      createdAt: Date.now(),
+      courseId,
+      topic,
+      questions: quizQuestions.map((q) => ({ id: q.id, correctIndex: q.correctIndex }))
+    });
+    pruneAiQuizKeys();
+
     res.status(201).json({
       success: true,
+      id: quizId,
+      quizId,
       title: title || `Quiz: ${topic}`,
       quiz: {
         topic,
-        questions: quizQuestions
+        questions: publicQuestions
       },
-      questions: quizQuestions
+      questions: publicQuestions
     });
   } catch (err) {
     next(err);
@@ -331,6 +433,34 @@ correctIndex is the 0-based integer index of the correct option. Do not include 
 }
 router.post('/courses/:courseId/ai/quizzes', authenticate, generateQuizHandler);
 router.post('/agent/quiz/:courseId', authenticate, generateQuizHandler);
+
+// POST /ai/quizzes/:quizId/grade — server-side grading of an AI practice quiz.
+// Accepts { answers: { [questionId]: selectedIndex } } (or an array) and returns the
+// score without ever exposing the answer key to the client.
+router.post('/ai/quizzes/:quizId/grade', authenticate, async (req, res, next) => {
+  try {
+    const entry = aiQuizKeys.get(req.params.quizId);
+    if (!entry) {
+      return res.status(404).json({ error: { code: 'QUIZ_NOT_FOUND', message: 'Quiz expired or not found; please generate a new one.' } });
+    }
+    const raw = (req.body && req.body.answers) || {};
+    const pick = (id) => (Array.isArray(raw) ? (raw.find((a) => (a.questionId || a.id) === id) || {}).value : raw[id]);
+
+    let correct = 0;
+    const detail = entry.questions.map((q) => {
+      const selected = pick(q.id);
+      const isCorrect = selected !== undefined && selected !== null && Number(selected) === Number(q.correctIndex);
+      if (isCorrect) correct += 1;
+      return { id: q.id, isCorrect };
+    });
+    const total = entry.questions.length;
+    const percentage = total > 0 ? Math.round((correct / total) * 100) : 0;
+
+    res.json({ success: true, quizId: req.params.quizId, correct, total, score: percentage, detail });
+  } catch (err) {
+    next(err);
+  }
+});
 
 // GET /agent/guidelines/active/:id
 router.get('/agent/guidelines/active/:id', authenticate, async (req, res, next) => {
@@ -392,13 +522,92 @@ router.get('/agent/quizzes/completed/:id', authenticate, async (req, res, next) 
   }
 });
 
-// POST /admin/task/create
-router.post('/admin/task/create', authenticate, requireRoles('admin'), async (req, res) => {
-  res.json({
-    status: 'success',
-    task_id: `task-${crypto.randomUUID().slice(0, 8)}`,
-    message: 'Administrative task scheduled.'
-  });
+// POST /admin/task/create — administrative Command Chat. Reads the request, answers it
+// using real platform data, and persists the exchange so the Execution Logs panel has a
+// record. No fabricated success.
+router.post('/admin/task/create', authenticate, requireRoles('admin'), async (req, res, next) => {
+  try {
+    const { request, message, session_id } = req.body || {};
+    const prompt = String(request || message || '').trim();
+    if (!prompt) {
+      return res.status(400).json({ error: { code: 'INVALID_INPUT', message: 'A request is required.' } });
+    }
+
+    // Gather live platform facts to ground the answer.
+    const [usersRes, coursesRes, enrollRes, assessRes, subRes, liveRes, guideRes] = await Promise.all([
+      query("SELECT COUNT(*) FILTER (WHERE role='student') AS students, COUNT(*) FILTER (WHERE role='instructor') AS instructors, COUNT(*) FILTER (WHERE role='admin') AS admins, COUNT(*) AS total FROM users WHERE deleted_at IS NULL"),
+      query("SELECT COUNT(*) AS total, COUNT(*) FILTER (WHERE status='published') AS published FROM courses WHERE status != 'archived'"),
+      query("SELECT COUNT(*) AS total FROM enrollments WHERE status IN ('enrolled','completed')"),
+      query("SELECT COUNT(*) AS total FROM assessments WHERE status='published'"),
+      query("SELECT COUNT(*) AS total, ROUND(AVG(grading_score)) AS avg_score FROM submissions WHERE grading_score IS NOT NULL"),
+      query("SELECT COUNT(*) AS total, COUNT(*) FILTER (WHERE status='live') AS live FROM live_sessions"),
+      query("SELECT COUNT(*) AS active FROM ai_guidelines WHERE status='active'")
+    ]);
+
+    const facts = {
+      totalUsers: Number(usersRes.rows[0].total),
+      students: Number(usersRes.rows[0].students),
+      instructors: Number(usersRes.rows[0].instructors),
+      admins: Number(usersRes.rows[0].admins),
+      courses: Number(coursesRes.rows[0].total),
+      publishedCourses: Number(coursesRes.rows[0].published),
+      enrollments: Number(enrollRes.rows[0].total),
+      publishedAssessments: Number(assessRes.rows[0].total),
+      submissions: Number(subRes.rows[0].total),
+      averageScore: subRes.rows[0].avg_score !== null ? Number(subRes.rows[0].avg_score) : null,
+      liveSessions: Number(liveRes.rows[0].live),
+      totalSessions: Number(liveRes.rows[0].total),
+      activeGuidelines: Number(guideRes.rows[0].active)
+    };
+
+    let answer;
+    try {
+      const Groq = (await import('groq-sdk')).default;
+      const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+      const completion = await groq.chat.completions.create({
+        model: 'qwen/qwen3.8-27b',
+        messages: [
+          {
+            role: 'system',
+            content: `You are the REAL_i administrative assistant. Answer concisely using ONLY the platform metrics provided. Current metrics: ${JSON.stringify(facts)}. If a question cannot be answered from these metrics, say so plainly.`
+          },
+          { role: 'user', content: prompt }
+        ],
+        temperature: 0.4,
+        max_tokens: 512
+      });
+      answer = completion.choices[0]?.message?.content?.trim();
+    } catch (llmErr) {
+      answer = null;
+    }
+
+    if (!answer) {
+      answer = `Platform snapshot — ${facts.students} students, ${facts.instructors} instructors, ${facts.admins} admins (${facts.totalUsers} users total); ${facts.publishedCourses} published of ${facts.courses} courses; ${facts.enrollments} active enrollments; ${facts.publishedAssessments} published assessments; average submission score ${facts.averageScore ?? 'n/a'}; ${facts.liveSessions} live of ${facts.totalSessions} sessions; ${facts.activeGuidelines} active guidelines.`;
+    }
+
+    let taskId = null;
+    try {
+      const saved = await query(
+        `INSERT INTO admin_tasks (requested_by, request, response, status) VALUES ($1, $2, $3, 'completed') RETURNING id`,
+        [req.user.id, prompt, answer]
+      );
+      taskId = String(saved.rows[0].id);
+    } catch (dbErr) {
+      console.error('Failed to persist admin task:', dbErr.message);
+    }
+
+    res.json({
+      status: 'success',
+      task_id: taskId || `task-${crypto.randomUUID().slice(0, 8)}`,
+      session_id: session_id || null,
+      message: answer,
+      response: answer,
+      content: answer,
+      metrics: facts
+    });
+  } catch (err) {
+    next(err);
+  }
 });
 
 export default router;

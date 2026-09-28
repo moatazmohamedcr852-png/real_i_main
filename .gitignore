@@ -1,5 +1,7 @@
 node_modules/
 .env
+.env.local
+*.log
 coverage/
-__pycache__/
-.pytest_cache/
+backend/uploads/
+.DS_Store

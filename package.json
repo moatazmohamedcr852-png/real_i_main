@@ -1,20 +1,17 @@
 {
-  "name": "real-i-backend",
+  "name": "real-i",
   "private": true,
-  "workspaces": [
-    "services/*"
-  ],
+  "description": "REAL.i — AI-powered learning management platform (Express + PostgreSQL).",
   "scripts": {
-    "test:core": "npm --workspace @real-i/core-api test",
-    "test:web": "node --test apps/web/tests/*.test.js",
-    "test": "npm run test:core && npm run test:web",
-    "start:core": "npm --workspace @real-i/core-api start",
-    "start:local": "node scripts/start-local.mjs"
-  },
-  "devDependencies": {
-    "mongodb-memory-server": "^11.2.0"
+    "install:backend": "npm --prefix backend install",
+    "setup": "npm run install:backend && npm --prefix backend run setup-pg && npm --prefix backend run migrate && npm --prefix backend run seed",
+    "start": "npm --prefix backend start",
+    "dev": "npm --prefix backend run dev",
+    "migrate": "npm --prefix backend run migrate",
+    "seed": "npm --prefix backend run seed",
+    "test": "node --test apps/web/tests/*.test.js"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=18"
   }
 }

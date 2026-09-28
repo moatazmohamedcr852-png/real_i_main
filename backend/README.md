@@ -16,7 +16,7 @@ A Node.js/Express backend powering the REAL_i educational web platform, backed b
 **Tool chosen: Plain SQL DDL + Node.js runner (`node db/migrate.js`) & `node-pg-migrate` compatibility**
 
 **Justification:**
-1. **Zero Abstraction Friction**: The data model was mapped directly from existing Mongoose schemas. Plain SQL DDL (`db/schema.sql`) provides full visibility and control over PostgreSQL native features such as `JSONB`, `UUID` generation via `pgcrypto`, `TIMESTAMPTZ`, foreign key cascade policies, partial unique indexes (`ON enrollments(student_id, course_id) WHERE status = 'enrolled'`), and check constraints.
+1. **Zero Abstraction Friction**: Plain SQL DDL (`db/schema.sql`) provides full visibility and control over PostgreSQL native features such as `JSONB`, `UUID` generation via `pgcrypto`, `TIMESTAMPTZ`, foreign key cascade policies, partial unique indexes (`ON enrollments(student_id, course_id) WHERE status = 'enrolled'`), and check constraints.
 2. **Performance & Lightweight Footprint**: Avoids the overhead of heavy ORMs like Prisma (which requires binary engines and multi-megabyte generated clients) or Knex (which adds a query-builder layer that is unnecessary when SQL queries are already defined).
 3. **Deterministic Seeding & Testing**: The migration script can be run idempotently in any environment with `npm run migrate`.
 
@@ -26,17 +26,24 @@ A Node.js/Express backend powering the REAL_i educational web platform, backed b
 
 ### 1. Environment Variables
 
-Create `.env` in `./backend`:
+Create `.env` in `./backend` (start from `.env.example`, which documents every variable):
 
 ```env
 PORT=3001
 DATABASE_URL=postgresql://postgres:postgres@localhost:5432/real_i
-JWT_SECRET=reali_super_secret_jwt_key_minimum_32_characters_long_123456
-JWT_ACCESS_SECRET=reali_super_secret_jwt_key_minimum_32_characters_long_123456
-JWT_REFRESH_SECRET=reali_super_secret_refresh_jwt_key_minimum_32_characters_long_789012
+JWT_SECRET=<32+ random chars>
+JWT_ACCESS_SECRET=<a different 32+ random chars>
+JWT_REFRESH_SECRET=<a third 32+ random chars>
 JWT_EXPIRES_IN=15m
+GROQ_API_KEY=<required for chat, quiz generation and summaries>
 FRONTEND_URL=http://localhost:3001
 NODE_ENV=development
+```
+
+Generate distinct secrets with:
+
+```bash
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 ```
 
 ### 2. Install Dependencies
@@ -152,9 +159,11 @@ All routes are mounted at `/v1/*` (primary), `/api/*`, and root shortcuts.
 ### Data & AI Integration (`/v1/data`, `/v1/agent`, `/v1/upload`)
 - `GET /data/projects`: List courses as projects
 - `GET /data/assets`: List uploaded course assets
-- `POST /upload`: Upload course files
+- `POST /upload`: Upload course files (stored on disk; **not** indexed or embedded)
 - `POST /courses/:id/ai/chat`: Interactive chat with AI tutor Raaed
 - `POST /courses/:id/ai/quizzes`: Generate contextual quizzes
 - `POST /agent/quizzes/results`: Submit student quiz results
 - `GET /agent/quizzes/completed/:id`: Completed quiz history
 - `POST /admin/task/create`: Create administrative AI task
+
+See `docs/ai-tutor.md` for what the AI routes actually do, and `docs/security-hardening-audit.md` for the access-control gaps in this list.

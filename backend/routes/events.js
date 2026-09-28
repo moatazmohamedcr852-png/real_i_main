@@ -16,6 +16,8 @@ function formatEvent(e) {
     endsAt: e.ends_at,
     startDate: e.starts_at,
     endDate: e.ends_at,
+    date: e.starts_at,
+    type: e.type || 'custom',
     status: e.status,
     createdBy: e.created_by ? String(e.created_by) : null,
     createdAt: e.created_at,
@@ -96,13 +98,38 @@ router.get('/events', authenticate, listEvents);
 // POST /calendar/events and POST /events
 async function createEventHandler(req, res, next) {
   try {
-    const { title, description, startsAt, endsAt, scope = 'global', courseId } = req.body || {};
-    if (!title || !startsAt) {
-      return res.status(400).json({ error: { code: 'INVALID_INPUT', message: 'Title and startsAt are required.' } });
+    const body = req.body || {};
+    const { title, description, scope = 'global', courseId, endsAt } = body;
+    // Accept either an explicit startsAt or the client's { date, time } pair.
+    let startsAt = body.startsAt || body.startDate || body.start;
+    if (!startsAt && body.date) {
+      startsAt = body.time ? `${body.date}T${body.time}` : body.date;
+    }
+    if (!title || !String(title).trim()) {
+      return res.status(400).json({ error: { code: 'INVALID_INPUT', message: 'Title is required.' } });
+    }
+    if (!startsAt) {
+      return res.status(400).json({ error: { code: 'INVALID_INPUT', message: 'A start date/time is required.' } });
     }
 
     const start = new Date(startsAt);
+    if (Number.isNaN(start.getTime())) {
+      return res.status(400).json({ error: { code: 'INVALID_INPUT', message: 'The start date/time could not be parsed.' } });
+    }
     const end = endsAt ? new Date(endsAt) : new Date(start.getTime() + 60 * 60 * 1000);
+
+    // The client posts to both /calendar/events and /events; guard against the
+    // resulting duplicate by reusing an identical event created moments ago.
+    const dupe = await query(
+      `SELECT * FROM calendar_events
+       WHERE created_by = $1 AND title = $2 AND starts_at = $3
+         AND created_at > now() - interval '10 seconds'
+       LIMIT 1`,
+      [req.user.id, title.trim(), start]
+    );
+    if (dupe.rows.length > 0) {
+      return res.status(200).json(formatEvent(dupe.rows[0]));
+    }
 
     const result = await query(
       `INSERT INTO calendar_events (title, description, starts_at, ends_at, scope, course_id, created_by)

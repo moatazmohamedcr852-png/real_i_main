@@ -6,6 +6,28 @@ import { authenticate, requireRoles } from '../middleware/auth.js';
 
 const router = Router();
 
+// Sessions left in 'live' well past their scheduled end are almost certainly abandoned
+// (closed tab, crashed host). Sweep them to 'ended' so /admin/live can start a fresh
+// broadcast instead of always attaching to a stale room. Grace period: 30 minutes.
+async function reapStaleLiveSessions() {
+  try {
+    const result = await query(
+      `UPDATE live_sessions SET status = 'ended', updated_at = now()
+       WHERE status = 'live' AND ends_at < now() - interval '30 minutes'
+       RETURNING id`
+    );
+    if (result.rows.length) {
+      console.log(`Reaped ${result.rows.length} stale live session(s) past their scheduled end.`);
+    }
+    return result.rows.length;
+  } catch (err) {
+    console.error('Failed to reap stale live sessions:', err.message);
+    return 0;
+  }
+}
+reapStaleLiveSessions();
+setInterval(reapStaleLiveSessions, 5 * 60 * 1000).unref?.();
+
 function formatMeeting(m, attendance = []) {
   const duration = Math.max(15, Math.round((new Date(m.ends_at) - new Date(m.starts_at)) / 60000));
   return {
