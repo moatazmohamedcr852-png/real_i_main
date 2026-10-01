@@ -1,0 +1,231 @@
+{
+  "timestamp": "2026-09-29T10:52:18.078Z",
+  "commit": "559d339",
+  "checks": [
+    {
+      "id": "AUTH-01",
+      "pass": true,
+      "detail": "admin=true student=true"
+    },
+    {
+      "id": "AUTH-02",
+      "pass": true,
+      "detail": "status=201 role=student id=60caf6a4-96d3-48e0-90f0-8df507587a63"
+    },
+    {
+      "id": "DEF-01a",
+      "pass": true,
+      "detail": "empty score=null status=pending"
+    },
+    {
+      "id": "DEF-01b",
+      "pass": true,
+      "detail": "correct score=100"
+    },
+    {
+      "id": "DEF-01c",
+      "pass": true,
+      "detail": "wrong score=0"
+    },
+    {
+      "id": "DEF-02",
+      "pass": false,
+      "detail": "keys=id,question,options,correct_answer,explanation"
+    },
+    {
+      "id": "DEF-02-grade",
+      "pass": true,
+      "detail": "score=0"
+    },
+    {
+      "id": "DEF-03",
+      "pass": true,
+      "detail": "total=42 withType=42 sample=quiz,quiz,quiz"
+    },
+    {
+      "id": "DEF-04",
+      "pass": true,
+      "detail": "fresh sees 1 assessments (enrolled in 1 course)"
+    },
+    {
+      "id": "DEF-05",
+      "pass": true,
+      "detail": "fresh=1 admin=62"
+    },
+    {
+      "id": "DEF-05-progress",
+      "pass": true,
+      "detail": "progress=0"
+    },
+    {
+      "id": "DEF-07",
+      "pass": false,
+      "detail": "occurrences=2 (should be 0)"
+    },
+    {
+      "id": "DEF-08",
+      "pass": true,
+      "detail": "window.confirm present=true"
+    },
+    {
+      "id": "DEF-09a",
+      "pass": true,
+      "detail": "GET status=200 academy=REAL_i Academy"
+    },
+    {
+      "id": "DEF-09b",
+      "pass": true,
+      "detail": "PUT status=200"
+    },
+    {
+      "id": "DEF-09c",
+      "pass": true,
+      "detail": "blank rejected=400"
+    },
+    {
+      "id": "DEF-09-ui",
+      "pass": true,
+      "detail": "usesBackend=true stillLocalStorage=true"
+    },
+    {
+      "id": "DEF-10a",
+      "pass": true,
+      "detail": "status=201 startsAt=2026-10-15T17:00:00.000Z"
+    },
+    {
+      "id": "DEF-10b",
+      "pass": true,
+      "detail": "duplicate suppressed=200"
+    },
+    {
+      "id": "DEF-11",
+      "pass": true,
+      "detail": "reports real counts=true"
+    },
+    {
+      "id": "DEF-12",
+      "pass": true,
+      "detail": "msg=\"14\" students=14"
+    },
+    {
+      "id": "DEF-13",
+      "pass": true,
+      "detail": "status=201 courseId=null"
+    },
+    {
+      "id": "DEF-14",
+      "pass": true,
+      "detail": "status=201"
+    },
+    {
+      "id": "DEF-15",
+      "pass": true,
+      "detail": "type=Exam pri=Critical status=draft active=false"
+    },
+    {
+      "id": "DEF-16",
+      "pass": true,
+      "detail": "status=200"
+    },
+    {
+      "id": "DEF-17",
+      "pass": true,
+      "detail": "asmCreate=true chat=true"
+    },
+    {
+      "id": "DEF-18",
+      "pass": true,
+      "detail": "createCourse=true CC=true"
+    },
+    {
+      "id": "DEF-19",
+      "pass": true,
+      "detail": "title check=true"
+    },
+    {
+      "id": "DEF-20",
+      "pass": true,
+      "detail": "absent=true"
+    },
+    {
+      "id": "DEF-22",
+      "pass": true,
+      "detail": "dead link absent=true"
+    },
+    {
+      "id": "DEF-23-labels",
+      "pass": true,
+      "detail": "admin=true student=true"
+    },
+    {
+      "id": "DEF-23-enter",
+      "pass": true,
+      "detail": "Enter handler=true"
+    },
+    {
+      "id": "DEF-24",
+      "pass": true,
+      "detail": "session reaper present=true"
+    },
+    {
+      "id": "A-DASH-01",
+      "pass": true,
+      "detail": "total users=16"
+    },
+    {
+      "id": "A-MEET-01",
+      "pass": true,
+      "detail": "create status=201"
+    },
+    {
+      "id": "A-MEET-02",
+      "pass": true,
+      "detail": "blank rejected status=400"
+    },
+    {
+      "id": "A-ASM-01",
+      "pass": true,
+      "detail": "status=201"
+    },
+    {
+      "id": "A-GUID-01",
+      "pass": true,
+      "detail": "guidelines count=37"
+    },
+    {
+      "id": "A-DATA-02",
+      "pass": true,
+      "detail": "blank guideline rejected=400"
+    },
+    {
+      "id": "A-PROF-01",
+      "pass": false,
+      "detail": "profile GET status=404"
+    },
+    {
+      "id": "S-CAT-02",
+      "pass": true,
+      "detail": "enroll status=201"
+    },
+    {
+      "id": "S-CAT-01",
+      "pass": "REAL_i Local Demo Course",
+      "detail": "title=REAL_i Local Demo Course modules=1"
+    },
+    {
+      "id": "S-CHAT-01",
+      "pass": true,
+      "detail": "status=200"
+    },
+    {
+      "id": "S-PROF-02",
+      "pass": false,
+      "detail": "mismatch rejected=200"
+    },
+    {
+      "id": "S-CAL-01",
+      "pass": true,
+      "detail": "calendar GET=200"
+    }
+  ]
+}

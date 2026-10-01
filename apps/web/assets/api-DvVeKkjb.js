@@ -313,6 +313,7 @@ export const toggleGuideline = (id) => r.put(`/admin/guidelines/${id}/toggle`);
 export const deleteGuideline = (id) => r.delete(`/admin/guidelines/${id}`);
 export const getUsers = () => r.get("/users").catch(() => []);
 export const getUser = (id) => r.get(`/users/${id}`).catch(() => r.get("/auth/me"));
+export const getStudentLearningSummary = (id) => r.get(`/users/${id}/learning-summary`);
 export const updateUserRole = (id, role) => r.put(`/users/${id}/role`, { role });
 export const updateUserProfile = (id, data) => r.put(`/users/${id}/profile`, data);
 export const getUserResults = (id) => r.get(`/users/${id}/results`).catch(() => []);
@@ -375,13 +376,57 @@ export const submitAttempt = (submissionId) => r.post(`/attempts/${submissionId}
 
 export const submitAssessment = (id, data) => {
   if (data?.submissionId) return submitAttempt(data.submissionId);
+  const files = Array.isArray(data?.files) ? data.files : [];
+  if (files.length && files.every((file) => typeof File !== "undefined" && file instanceof File)) {
+    const body = new FormData();
+    for (const [key, value] of Object.entries(data)) {
+      if (key !== "files" && value != null) body.append(key, typeof value === "string" ? value : JSON.stringify(value));
+    }
+    for (const file of files) body.append("files", file, file.name);
+    return r.post(`/assessments/${id}/submit`, body);
+  }
   return r.post(`/assessments/${id}/submit`, data).catch(() => submitAttempt(id));
 };
 
 export const getAssessmentSubmissions = (id) =>
   r.get(`/assessments/${id}/submissions`).catch(() => r.get(`/courses/${id}/grading-queue`));
 
+export const gradeSubmission = (submissionId, score, feedback = '', comments = '', suggestions = '') =>
+  r.patch(`/attempts/${submissionId}/grade`, { score, feedback, comments, suggestions });
+
+export const getSubmissionReview = (submissionId) => r.get(`/attempts/${submissionId}/review`);
+
+export const loadSubmissionFile = async (submissionId, fileId) => {
+  const response = await fetch(`${getBaseUrl().replace(/\/+$/, '')}/attempts/${submissionId}/files/${fileId}`, {
+    headers: { Authorization: `Bearer ${getStoredToken('reali_token')}` }
+  });
+  if (!response.ok) throw new Error('Could not load the submitted file.');
+  return { url: URL.createObjectURL(await response.blob()), mimeType: response.headers.get('Content-Type') || 'application/octet-stream' };
+};
+
+export const openSubmissionFile = async (submissionId, fileId) => {
+  const opened = window.open('about:blank', '_blank');
+  if (opened) opened.opener = null;
+  const response = await fetch(`${getBaseUrl().replace(/\/+$/, '')}/attempts/${submissionId}/files/${fileId}`, {
+    headers: { Authorization: `Bearer ${getStoredToken('reali_token')}` }
+  });
+  if (!response.ok) {
+    opened?.close();
+    throw new Error('Could not open the submitted file.');
+  }
+  const objectUrl = URL.createObjectURL(await response.blob());
+  if (opened) opened.location.href = objectUrl;
+  else {
+    const link = document.createElement('a');
+    link.href = objectUrl;
+    link.target = '_blank';
+    link.rel = 'noopener';
+    link.click();
+  }
+};
+
 export const getMySubmissions = () => r.get("/assessments/student/me").catch(() => []);
+export const getStudentSubmissions = (studentId) => r.get(`/assessments/students/${studentId}/submissions`);
 
 export const getEvents = (params = {}) => {
   const query = new URLSearchParams();
@@ -420,16 +465,10 @@ export const endMeeting = (id) => r.put(`/meetings/${id}/end`);
 export const deleteMeetingSeries = (id) => r.delete(`/meetings/series/${id}`);
 export const generateMeetingSummary = (id) => r.post(`/meetings/${id}/generate-summary`);
 
-export const syncMeetingAttendance = (data) =>
-  r.post("/meetings/attendance/sync", data).catch(async () => {
-    if (data.sessionId && data.status === "left") {
-      return r.post(`/live-sessions/${data.sessionId}/attendance/leave`, {});
-    }
-    if (data.sessionId) {
-      return r.post(`/live-sessions/${data.sessionId}/attendance/join`, {});
-    }
-    return { success: true };
-  });
+export const syncMeetingAttendance = (data) => {
+  if (!data?.sessionId) return Promise.reject(new Error("A live session id is required to record attendance."));
+  return r.post(`/live-sessions/${data.sessionId}/attendance/${data.status === "left" ? "leave" : "join"}`, {});
+};
 
 export const getMeetingAttendance = (sessionId) =>
   r.get(`/live-sessions/${sessionId}/attendance`).catch(() => r.get(`/meetings/${sessionId}/attendance`));
@@ -464,6 +503,7 @@ export const getNotifications = (params = {}) => {
   const qs = query.toString();
   return r.get(`/notifications${qs ? `?${qs}` : ""}`);
 };
+export const markNotificationRead = (id) => r.post(`/notifications/${id}/read`, {});
 
 // Rolldown getters map
 var t = e({

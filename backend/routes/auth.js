@@ -2,6 +2,7 @@ import { Router } from 'express';
 import bcrypt from 'bcryptjs';
 import crypto from 'node:crypto';
 import jwt from 'jsonwebtoken';
+import nodemailer from 'nodemailer';
 import { query } from '../db/pool.js';
 import { authenticate } from '../middleware/auth.js';
 
@@ -63,9 +64,22 @@ router.post('/register', async (req, res, next) => {
     }
 
     const trimmedEmail = email.trim().toLowerCase();
-    const existing = await query('SELECT id FROM users WHERE email = $1', [trimmedEmail]);
+    const trimmedName = name.trim();
+
+    // Check both email and name uniqueness
+    const existing = await query(
+      'SELECT id, email, name FROM users WHERE email = $1 OR name = $2',
+      [trimmedEmail, trimmedName]
+    );
+
     if (existing.rows.length > 0) {
-      return res.status(409).json({ error: { code: 'EMAIL_ALREADY_REGISTERED', message: 'An account already exists for this email.' } });
+      const conflict = existing.rows[0];
+      if (conflict.email === trimmedEmail) {
+        return res.status(409).json({ error: { code: 'EMAIL_ALREADY_REGISTERED', message: 'An account already exists for this email.' } });
+      }
+      if (conflict.name === trimmedName) {
+        return res.status(409).json({ error: { code: 'USERNAME_TAKEN', message: 'This name is already taken. Please choose another.' } });
+      }
     }
 
     const hash = await bcrypt.hash(password, 12);
@@ -227,6 +241,111 @@ router.post('/refresh', async (req, res, next) => {
       accessTokenExpiresAt: tokens.accessTokenExpiresAt,
       refreshTokenExpiresAt: tokens.refreshTokenExpiresAt
     });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /forgot-password
+router.post('/forgot-password', async (req, res, next) => {
+  try {
+    const { email } = req.body || {};
+    if (!email) {
+      return res.status(400).json({ error: { code: 'INVALID_INPUT', message: 'Email is required.' } });
+    }
+
+    const trimmedEmail = email.trim().toLowerCase();
+    const result = await query('SELECT id FROM users WHERE email = $1 AND deleted_at IS NULL', [trimmedEmail]);
+
+    if (result.rows.length === 0) {
+      return res.status(400).json({ error: { code: 'WRONG_EMAIL', message: 'The email is incorrect.' } });
+    }
+
+    const user = result.rows[0];
+
+    // Generate a 6-digit OTP
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const otpHash = await bcrypt.hash(otp, 10);
+    const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
+
+    await query(
+      `INSERT INTO password_resets (user_id, otp_hash, expires_at)
+       VALUES ($1, $2, $3)`,
+      [user.id, otpHash, expiresAt]
+    );
+
+    // Send email using Gmail
+    const transporter = nodemailer.createTransport({
+      service: 'gmail',
+      auth: {
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASS
+      }
+    });
+
+    const mailOptions = {
+      from: process.env.EMAIL_USER,
+      to: trimmedEmail,
+      subject: 'Password Reset OTP',
+      text: `Your OTP for password reset is: ${otp}. It expires in 15 minutes.\n\nYou can reset your password here: http://localhost:3001/reset-password.html?email=${encodeURIComponent(trimmedEmail)}`
+    };
+
+    await transporter.sendMail(mailOptions);
+    console.log(`[Email Sent] OTP for ${trimmedEmail} was sent successfully.`);
+
+    res.status(200).json({ message: 'OTP sent to your email.' });
+  } catch (err) {
+    console.error('Error sending email:', err);
+    res.status(500).json({ error: { code: 'EMAIL_SEND_FAILED', message: 'Failed to send OTP email.' } });
+  }
+});
+
+// POST /reset-password
+router.post('/reset-password', async (req, res, next) => {
+  try {
+    const { email, otp, newPassword } = req.body || {};
+    if (!email || !otp || !newPassword) {
+      return res.status(400).json({ error: { code: 'INVALID_INPUT', message: 'Email, OTP, and new password are required.' } });
+    }
+
+    const trimmedEmail = email.trim().toLowerCase();
+    const userResult = await query('SELECT id FROM users WHERE email = $1 AND deleted_at IS NULL', [trimmedEmail]);
+
+    if (userResult.rows.length === 0) {
+      return res.status(400).json({ error: { code: 'INVALID_REQUEST', message: 'Invalid OTP or email.' } });
+    }
+    const user = userResult.rows[0];
+
+    // Find the latest valid OTP
+    const resetResult = await query(
+      `SELECT id, otp_hash FROM password_resets
+       WHERE user_id = $1 AND used_at IS NULL AND expires_at > now()
+       ORDER BY created_at DESC LIMIT 1`,
+      [user.id]
+    );
+
+    if (resetResult.rows.length === 0) {
+      return res.status(400).json({ error: { code: 'INVALID_OTP', message: 'Invalid or expired OTP.' } });
+    }
+
+    const resetRow = resetResult.rows[0];
+    const isMatch = await bcrypt.compare(otp.toString(), resetRow.otp_hash);
+
+    if (!isMatch) {
+      return res.status(400).json({ error: { code: 'INVALID_OTP', message: 'Invalid or expired OTP.' } });
+    }
+
+    // Update password
+    const newHash = await bcrypt.hash(newPassword, 12);
+    await query('UPDATE users SET password_hash = $1, updated_at = now() WHERE id = $2', [newHash, user.id]);
+
+    // Mark OTP as used
+    await query('UPDATE password_resets SET used_at = now() WHERE id = $1', [resetRow.id]);
+
+    // Optional: revoke all existing sessions to force re-login
+    await query('UPDATE refresh_tokens SET revoked_at = now() WHERE user_id = $1 AND revoked_at IS NULL', [user.id]);
+
+    res.status(200).json({ message: 'Password has been reset successfully.' });
   } catch (err) {
     next(err);
   }

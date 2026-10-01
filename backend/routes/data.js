@@ -298,14 +298,19 @@ async function chatHandler(req, res, next) {
         model: 'qwen/qwen3.8-27b',
         messages,
         temperature: 0.7,
-        max_tokens: 1024,
+        max_tokens: 800,
         top_p: 0.9,
       });
 
       botReply = completion.choices[0]?.message?.content || 'I apologize, I could not generate a response. Please try again.';
     } catch (llmErr) {
       console.error('Groq LLM error:', llmErr.message);
-      botReply = `Hello! I am Raaed, your AI Tutor. I'm experiencing a temporary issue connecting to my language model. Regarding your question: "${message}", please try again in a moment. Error: ${llmErr.message}`;
+      const errMsg = (llmErr.message || '').toLowerCase();
+      if (llmErr.status === 429 || errMsg.includes('429') || errMsg.includes('token') || errMsg.includes('rate_limit')) {
+        botReply = "we are out of service right now";
+      } else {
+        botReply = `Hello! I am Raaed, your AI Tutor. I'm experiencing a temporary issue connecting to my language model. Regarding your question: "${message}", please try again in a moment. Error: ${llmErr.message}`;
+      }
     }
 
     // Save assistant message
@@ -364,9 +369,9 @@ Respond ONLY with a valid JSON object of the form {"questions": [...]}, where ea
   "options": ["Option A", "Option B", "Option C", "Option D"],
   "correct_answer": "The exact string of the correct option",
   "correctIndex": 0,
-  "explanation": "Brief explanation of why it's correct"
+  "explanation": "Brief explanation of why the correct answer is right, AND a hint explaining why the other options are wrong."
 }
-correctIndex is the 0-based integer index of the correct option. Do not include comments or extra keys.`;
+correctIndex is the 0-based integer index of the correct option. IMPORTANT: Randomize the correctIndex for each question so that the correct answer is NOT always the first option! Do not include comments or extra keys.`;
 
     const completion = await groq.chat.completions.create({
       model: 'qwen/qwen3.8-27b',
@@ -397,12 +402,13 @@ correctIndex is the 0-based integer index of the correct option. Do not include 
       throw new Error('Failed to generate valid quiz format');
     }
 
-    // Answer key is retained server-side only; never send correct_answer/correctIndex
-    // to the browser. Grading is performed server-side on submission.
+    // Return the correct_answer (as string index) and explanation to the browser so the UI can provide instant feedback.
     const publicQuestions = quizQuestions.map((q) => ({
       id: q.id,
       question: q.question,
-      options: q.options
+      options: q.options,
+      correct_answer: String(q.correctIndex),
+      explanation: q.explanation
     }));
 
     // Keep the answer key in an ephemeral server-side store, keyed by a quiz id the

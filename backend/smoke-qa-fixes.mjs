@@ -15,7 +15,8 @@ ok('admin+student login', !!(admin && student));
 
 // Fresh student enrolled in exactly ONE course — the correct subject for scope checks.
 const freshEmail = `qa.scope.${Date.now()}@x.test`;
-const reg = await (await fetch(`${B}/auth/register`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: 'QA Scope Student', email: freshEmail, password: 'Passw0rd!123' }) })).json();
+const freshName = `QA Scope Student ${Date.now()}`;
+const reg = await (await fetch(`${B}/auth/register`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: freshName, email: freshEmail, password: 'Passw0rd!123' }) })).json();
 const fresh = reg.accessToken || reg.token;
 const freshId = reg.id || reg.user?.id;
 const published = (await (await fetch(`${B}/courses`, { headers: H(fresh) })).json()).filter(c => c.is_published);

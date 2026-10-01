@@ -18,6 +18,7 @@ import userRoutes from './routes/users.js';
 import adminRoutes from './routes/admin.js';
 import dataRoutes from './routes/data.js';
 import notificationRoutes from './routes/notifications.js';
+import { startCalendarReminderScheduler } from './services/calendarNotifications.js';
 import { errorHandler, notFound } from './middleware/errorHandler.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -59,6 +60,7 @@ function mountRouters(prefix = '') {
 // Mount under /v1 (primary for frontend), /api, and root
 mountRouters('/v1');
 mountRouters('/api');
+startCalendarReminderScheduler();
 
 // Direct /login and /register shortcuts if frontend hits them directly
 app.post('/login', (req, res, next) => {

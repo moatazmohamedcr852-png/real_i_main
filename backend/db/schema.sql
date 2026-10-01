@@ -133,6 +133,8 @@ CREATE TABLE IF NOT EXISTS submissions (
   grading_status       VARCHAR(20) DEFAULT 'pending' CHECK (grading_status IN ('pending', 'auto_graded', 'manual_review', 'graded')),
   grading_score        NUMERIC(5,2) DEFAULT NULL,
   grading_feedback     TEXT DEFAULT NULL,
+  grading_comments     TEXT DEFAULT NULL,
+  grading_suggestions  TEXT DEFAULT NULL,
   graded_by            UUID REFERENCES users(id),
   graded_at            TIMESTAMPTZ DEFAULT NULL,
   created_at           TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -140,6 +142,20 @@ CREATE TABLE IF NOT EXISTS submissions (
 );
 CREATE INDEX IF NOT EXISTS idx_submission_course ON submissions(course_id, kind, grading_status);
 CREATE INDEX IF NOT EXISTS idx_submission_student ON submissions(student_id, course_id);
+ALTER TABLE submissions ADD COLUMN IF NOT EXISTS grading_comments TEXT DEFAULT NULL;
+ALTER TABLE submissions ADD COLUMN IF NOT EXISTS grading_suggestions TEXT DEFAULT NULL;
+
+-- Assignment uploads are stored as PostgreSQL BYTEA values, linked to the submission.
+CREATE TABLE IF NOT EXISTS assessment_submission_files (
+  id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  submission_id  UUID NOT NULL REFERENCES submissions(id) ON DELETE CASCADE,
+  original_name  VARCHAR(500) NOT NULL,
+  mime_type      VARCHAR(255) NOT NULL DEFAULT 'application/octet-stream',
+  file_size      BIGINT NOT NULL CHECK (file_size > 0),
+  file_data      BYTEA NOT NULL,
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_assessment_submission_files_submission ON assessment_submission_files(submission_id);
 
 -- Live Sessions (Meetings)
 CREATE TABLE IF NOT EXISTS live_sessions (
@@ -216,6 +232,7 @@ CREATE TABLE IF NOT EXISTS calendar_events (
   course_id   UUID REFERENCES courses(id) ON DELETE CASCADE,
   title       VARCHAR(200) NOT NULL,
   description TEXT DEFAULT '',
+  event_type  VARCHAR(20) NOT NULL DEFAULT 'custom' CHECK (event_type IN ('custom', 'meeting')),
   starts_at   TIMESTAMPTZ NOT NULL,
   ends_at     TIMESTAMPTZ DEFAULT NULL,
   status      VARCHAR(20) NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'cancelled')),
@@ -223,6 +240,7 @@ CREATE TABLE IF NOT EXISTS calendar_events (
   created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+ALTER TABLE calendar_events ADD COLUMN IF NOT EXISTS event_type VARCHAR(20) NOT NULL DEFAULT 'custom';
 CREATE INDEX IF NOT EXISTS idx_calendar_events ON calendar_events(scope, status, starts_at);
 
 -- Notifications Table
@@ -352,3 +370,14 @@ CREATE TABLE IF NOT EXISTS admin_tasks (
   completed_at  TIMESTAMPTZ DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS idx_admin_tasks_created ON admin_tasks(created_at DESC);
+
+-- Password Resets Table
+CREATE TABLE IF NOT EXISTS password_resets (
+  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id     UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  otp_hash    TEXT NOT NULL,
+  expires_at  TIMESTAMPTZ NOT NULL,
+  used_at     TIMESTAMPTZ DEFAULT NULL,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_password_resets_user ON password_resets(user_id);

@@ -109,6 +109,14 @@ async function listMeetings(req, res, next) {
       params.push(courseId);
       sql += ` AND ls.course_id = $${params.length}`;
     }
+    if (req.user.role === 'student') {
+      params.push(req.user.id);
+      sql += ` AND EXISTS (
+        SELECT 1 FROM enrollments e
+        WHERE e.course_id = ls.course_id AND e.student_id = $${params.length}
+          AND e.status IN ('enrolled', 'completed')
+      )`;
+    }
 
     sql += ' ORDER BY ls.starts_at DESC';
     const result = await query(sql, params);
@@ -249,6 +257,16 @@ async function endMeetingHandler(req, res, next) {
     if (result.rows.length === 0) {
       return res.status(404).json({ error: { code: 'MEETING_NOT_FOUND', message: 'Meeting not found.' } });
     }
+    await query(
+      `UPDATE attendance_records
+       SET total_seconds = total_seconds + CASE
+             WHEN active_joined_at IS NULL THEN 0
+             ELSE LEAST(60, GREATEST(0, FLOOR(EXTRACT(EPOCH FROM (now() - last_event_at)))::int))
+           END,
+           active_joined_at = NULL, last_event_at = now(), updated_at = now()
+       WHERE session_id = $1 AND active_joined_at IS NOT NULL`,
+      [req.params.id]
+    );
     res.json({ success: true, status: 'ended', meeting: formatMeeting(result.rows[0]) });
   } catch (err) {
     next(err);
@@ -307,20 +325,15 @@ async function authorizeJoinHandler(req, res, next) {
     const session = sessionRes.rows[0];
     const isHost = req.user.role === 'admin' || String(session.host_id) === String(req.user.id);
 
-    // Enrollment gatekeeper: instructors/admins always pass; students must be enrolled in the session's course.
+    // Enrollment gatekeeper: staff may host; students must already be enrolled.
     const isStaff = req.user.role === 'admin' || req.user.role === 'instructor';
     if (!isStaff && !isHost) {
       const enrollmentRes = await query(
-        'SELECT 1 FROM enrollments WHERE student_id = $1 AND course_id = $2 AND status = $3',
-        [req.user.id, session.course_id, 'enrolled']
+        "SELECT 1 FROM enrollments WHERE student_id = $1 AND course_id = $2 AND status IN ('enrolled', 'completed')",
+        [req.user.id, session.course_id]
       );
       if (enrollmentRes.rows.length === 0) {
-        // Auto-enroll the user to prevent 403 errors during testing
-        await query(
-          `INSERT INTO enrollments (student_id, course_id, status) VALUES ($1, $2, $3)
-           ON CONFLICT (student_id, course_id) WHERE status = 'enrolled' DO NOTHING`,
-          [req.user.id, session.course_id, 'enrolled']
-        );
+        return res.status(403).json({ error: { code: 'COURSE_ENROLLMENT_REQUIRED', message: 'Enroll in this course before joining its live session.' } });
       }
     }
 
@@ -366,28 +379,48 @@ async function getAttendanceHandler(req, res, next) {
   try {
     const sessionId = req.params.sessionId || req.params.id;
     const result = await query(
-      `SELECT ar.*, u.name as student_name, u.email as student_email
-       FROM attendance_records ar
-       JOIN users u ON u.id = ar.student_id
-       WHERE ar.session_id = $1`,
+      `SELECT u.id AS student_id, u.name AS student_name, u.email AS student_email,
+              GREATEST(1, FLOOR(EXTRACT(EPOCH FROM (ls.ends_at - ls.starts_at)) / 60))::int AS expected_duration_minutes,
+              ar.id AS attendance_id, COALESCE(ar.total_seconds, 0) AS total_seconds,
+              ar.active_joined_at, ar.last_event_at, ar.created_at AS first_joined_at
+       FROM live_sessions ls
+       JOIN enrollments e ON e.course_id = ls.course_id
+         AND e.status IN ('enrolled', 'completed')
+       JOIN users u ON u.id = e.student_id AND u.role = 'student' AND u.deleted_at IS NULL
+       LEFT JOIN attendance_records ar ON ar.session_id = ls.id AND ar.student_id = u.id
+       WHERE ls.id = $1
+       ORDER BY u.name, u.email`,
       [sessionId]
     );
 
     const totalCount = result.rows.length;
-    const presentCount = result.rows.filter((r) => r.total_seconds > 0).length;
-
-    res.json({
-      success: true,
-      attendance: result.rows.map((r) => ({
-        id: String(r.id),
+    const attendance = result.rows.map((r) => {
+      const seconds = Number(r.total_seconds) || 0;
+      const lastEvent = r.last_event_at ? new Date(r.last_event_at).getTime() : 0;
+      const isPresentNow = !!r.active_joined_at && lastEvent >= Date.now() - 45000;
+      return {
+        id: r.attendance_id ? String(r.attendance_id) : null,
         studentId: String(r.student_id),
         name: r.student_name,
         email: r.student_email,
-        totalSeconds: r.total_seconds,
-        status: r.total_seconds > 0 ? 'attended' : 'absent'
-      })),
+        totalSeconds: seconds,
+        firstJoinedAt: r.first_joined_at,
+        lastSeenAt: r.last_event_at,
+        isPresentNow,
+        attendancePercentage: Math.min(100, Math.round((seconds / (Number(r.expected_duration_minutes) * 60 || 1)) * 100)),
+        status: isPresentNow ? 'present' : seconds > 0 ? 'attended' : 'absent'
+      };
+    });
+    const presentCount = attendance.filter((r) => r.isPresentNow).length;
+    const attendedCount = attendance.filter((r) => r.totalSeconds > 0 || r.isPresentNow).length;
+
+    res.json({
+      success: true,
+      attendance,
       totalCount,
-      presentCount
+      presentCount,
+      attendedCount,
+      absentCount: Math.max(0, totalCount - attendedCount)
     });
   } catch (err) {
     next(err);
@@ -397,31 +430,55 @@ router.get('/live-sessions/:sessionId/attendance', authenticate, requireRoles('i
 router.get('/meetings/:sessionId/attendance', authenticate, requireRoles('instructor', 'admin'), getAttendanceHandler);
 
 // POST /live-sessions/:sessionId/attendance/join
-router.post('/live-sessions/:sessionId/attendance/join', authenticate, async (req, res, next) => {
+async function attendanceJoinHandler(req, res, next) {
   try {
-    const sessionRes = await query('SELECT course_id FROM live_sessions WHERE id = $1', [req.params.sessionId]);
+    if (req.user.role !== 'student') {
+      return res.status(403).json({ error: { code: 'STUDENT_ATTENDANCE_ONLY', message: 'Only enrolled students can check in.' } });
+    }
+    const sessionRes = await query('SELECT course_id, status FROM live_sessions WHERE id = $1', [req.params.sessionId]);
     if (sessionRes.rows.length === 0) {
       return res.status(404).json({ error: { code: 'SESSION_NOT_FOUND', message: 'Session not found.' } });
     }
 
-    const courseId = sessionRes.rows[0].course_id;
+    const session = sessionRes.rows[0];
+    if (session.status !== 'live') {
+      return res.status(409).json({ error: { code: 'SESSION_NOT_LIVE', message: 'Attendance can only be recorded during a live session.' } });
+    }
+    const enrollment = await query(
+      "SELECT 1 FROM enrollments WHERE student_id = $1 AND course_id = $2 AND status IN ('enrolled', 'completed')",
+      [req.user.id, session.course_id]
+    );
+    if (enrollment.rows.length === 0) {
+      return res.status(403).json({ error: { code: 'COURSE_ENROLLMENT_REQUIRED', message: 'Enroll in this course to record attendance.' } });
+    }
+
     await query(
       `INSERT INTO attendance_records (session_id, course_id, student_id, active_joined_at, last_event_at)
        VALUES ($1, $2, $3, now(), now())
        ON CONFLICT (session_id, student_id)
-       DO UPDATE SET active_joined_at = COALESCE(attendance_records.active_joined_at, now()), last_event_at = now()`,
-      [req.params.sessionId, courseId, req.user.id]
+       DO UPDATE SET
+         total_seconds = attendance_records.total_seconds + CASE
+           WHEN attendance_records.active_joined_at IS NULL THEN 0
+           ELSE LEAST(60, GREATEST(0, FLOOR(EXTRACT(EPOCH FROM (now() - attendance_records.last_event_at)))::int))
+         END,
+         active_joined_at = COALESCE(attendance_records.active_joined_at, now()),
+         last_event_at = now(), updated_at = now()`,
+      [req.params.sessionId, session.course_id, req.user.id]
     );
 
     res.json({ success: true, message: 'Join recorded.' });
   } catch (err) {
     next(err);
   }
-});
+}
+router.post('/live-sessions/:sessionId/attendance/join', authenticate, attendanceJoinHandler);
 
 // POST /live-sessions/:sessionId/attendance/leave
-router.post('/live-sessions/:sessionId/attendance/leave', authenticate, async (req, res, next) => {
+async function attendanceLeaveHandler(req, res, next) {
   try {
+    if (req.user.role !== 'student') {
+      return res.status(403).json({ error: { code: 'STUDENT_ATTENDANCE_ONLY', message: 'Only enrolled students can check out.' } });
+    }
     const attRes = await query(
       'SELECT * FROM attendance_records WHERE session_id = $1 AND student_id = $2',
       [req.params.sessionId, req.user.id]
@@ -429,16 +486,16 @@ router.post('/live-sessions/:sessionId/attendance/leave', authenticate, async (r
 
     if (attRes.rows.length > 0) {
       const rec = attRes.rows[0];
-      let addSeconds = 0;
-      if (rec.active_joined_at) {
-        addSeconds = Math.max(0, Math.round((Date.now() - new Date(rec.active_joined_at).getTime()) / 1000));
-      }
 
       await query(
         `UPDATE attendance_records
-         SET total_seconds = total_seconds + $1, active_joined_at = NULL, last_event_at = now()
-         WHERE id = $2`,
-        [addSeconds, rec.id]
+         SET total_seconds = total_seconds + CASE
+               WHEN active_joined_at IS NULL THEN 0
+               ELSE GREATEST(0, FLOOR(EXTRACT(EPOCH FROM (now() - last_event_at)))::int)
+             END,
+             active_joined_at = NULL, last_event_at = now(), updated_at = now()
+         WHERE id = $1`,
+        [rec.id]
       );
     }
 
@@ -446,19 +503,16 @@ router.post('/live-sessions/:sessionId/attendance/leave', authenticate, async (r
   } catch (err) {
     next(err);
   }
-});
+}
+router.post('/live-sessions/:sessionId/attendance/leave', authenticate, attendanceLeaveHandler);
 
 // POST /meetings/attendance/sync
 router.post('/meetings/attendance/sync', authenticate, async (req, res, next) => {
   try {
     const { sessionId, status } = req.body || {};
-    if (sessionId) {
-      if (status === 'left') {
-        req.params.sessionId = sessionId;
-        return next();
-      }
-    }
-    res.json({ success: true });
+    if (!sessionId) return res.status(400).json({ error: { code: 'SESSION_REQUIRED', message: 'Session id is required.' } });
+    req.params.sessionId = sessionId;
+    return (status === 'left' ? attendanceLeaveHandler : attendanceJoinHandler)(req, res, next);
   } catch (err) {
     next(err);
   }

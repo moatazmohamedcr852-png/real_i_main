@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>REAL_i Platform — QA Retest Report — 30 September 2026</title>
+<style>
+  :root{
+    --bg:#f7f7f8; --card:#ffffff; --ink:#15161a; --muted:#5d6270;
+    --line:#e2e4ea; --accent:#1f4fd8;
+    --pass:#0f7b3f; --pass-bg:#e7f6ec;
+    --fail:#b4232a; --fail-bg:#fdeceb;
+    --part:#9a6100; --part-bg:#fdf3e0;
+    --block:#4b5563; --block-bg:#eef0f3;
+    --fixed:#0f7b3f;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+       font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+  .wrap{max-width:1080px;margin:0 auto;padding:40px 24px 80px}
+  header.rpt{border-bottom:3px solid var(--ink);padding-bottom:20px;margin-bottom:32px}
+  header.rpt h1{margin:0 0 6px;font-size:30px;letter-spacing:-.4px}
+  header.rpt .sub{color:var(--muted);font-size:15px}
+  header.rpt .meta{margin-top:14px;font-size:13px;color:var(--muted)}
+  header.rpt .meta b{color:var(--ink);font-weight:600}
+  h2{font-size:21px;margin:44px 0 12px;padding-bottom:8px;border-bottom:1px solid var(--line)}
+  h3{font-size:16px;margin:28px 0 8px}
+  p{margin:10px 0}
+  ul,ol{margin:10px 0;padding-left:22px}
+  li{margin:5px 0}
+  code{background:#eef0f4;padding:1px 5px;border-radius:4px;font-size:12.5px;
+       font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+  pre{background:#15161a;color:#e6e6e6;padding:14px 16px;border-radius:8px;overflow-x:auto;
+      font-size:12.5px;line-height:1.5;font-family:ui-monospace,Menlo,Consolas,monospace}
+  pre .p{color:#7fd6a2} pre .f{color:#ff9ba1}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:18px 20px;margin:16px 0}
+  table{width:100%;border-collapse:collapse;margin:14px 0;font-size:13.5px;background:var(--card)}
+  th,td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{background:#f0f1f5;font-size:11.5px;text-transform:uppercase;letter-spacing:.06em;color:#3d4351}
+  tbody tr:last-child td{border-bottom:none}
+  table.counts td:first-child{font-weight:600}
+  .badge{display:inline-block;padding:2px 9px;border-radius:20px;font-size:11.5px;font-weight:700;
+         letter-spacing:.03em;white-space:nowrap}
+  .b-pass{color:var(--pass);background:var(--pass-bg)}
+  .b-fail{color:var(--fail);background:var(--fail-bg)}
+  .b-part{color:var(--part);background:var(--part-bg)}
+  .b-block{color:var(--block);background:var(--block-bg)}
+  .b-fixed{color:var(--fixed);background:var(--pass-bg)}
+  .sev{display:inline-block;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em}
+  .s-crit{background:#2b0a0c;color:#ffd9dc}
+  .s-high{background:var(--fail-bg);color:var(--fail)}
+  .s-med{background:var(--part-bg);color:var(--part)}
+  .s-low{background:var(--block-bg);color:var(--block)}
+  .id{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12.5px;font-weight:700;white-space:nowrap}
+  .kpis{display:flex;flex-wrap:wrap;gap:12px;margin:18px 0}
+  .kpi{flex:1 1 150px;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 16px}
+  .kpi .n{font-size:28px;font-weight:800;line-height:1.1}
+  .kpi .l{font-size:11.5px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);margin-top:4px}
+  .kpi.pass .n{color:var(--pass)} .kpi.fail .n{color:var(--fail)}
+  .kpi.part .n{color:var(--part)} .kpi.block .n{color:var(--block)}
+  .callout{border-left:4px solid var(--fail);background:var(--fail-bg);padding:12px 16px;border-radius:0 8px 8px 0;margin:16px 0}
+  .callout.warn{border-left-color:var(--part);background:var(--part-bg)}
+  .callout.good{border-left-color:var(--pass);background:var(--pass-bg)}
+  .callout p{margin:4px 0}
+  .note{font-size:13px;color:var(--muted)}
+  .toc{columns:2;column-gap:32px;font-size:14px}
+  .toc a{color:var(--accent);text-decoration:none}
+  .toc a:hover{text-decoration:underline}
+  .grp td{background:#f7f8fa;font-weight:700;font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:#3d4351}
+  .was{color:var(--muted);font-size:12.5px}
+  footer{margin-top:56px;padding-top:18px;border-top:1px solid var(--line);font-size:13px;color:var(--muted)}
+  @media print{ body{background:#fff} .wrap{padding:0;max-width:none} .card,table{break-inside:avoid} h2{break-after:avoid} }
+  @media (max-width:720px){ .toc{columns:1} }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="rpt">
+  <h1>REAL_i Platform — QA Retest Report</h1>
+  <div class="sub">Verification pass over the 16 failed and 4 partial scenarios from the 26 September revalidation, after the defect-fix work</div>
+  <div class="meta">
+    <b>Date:</b> 30 September 2026 &nbsp;·&nbsp;
+    <b>Build:</b> branch <code>main</code>, commit <code>559d339</code> + uncommitted password-reset work &nbsp;·&nbsp;
+    <b>Stack:</b> Express 4 + PostgreSQL 16 (portable, <code>C:\Users\Public\pgsql</code>), backend on <code>:3001</code>, precompiled SPA served from <code>apps/web</code> &nbsp;·&nbsp;
+    <b>Supersedes:</b> <code>QA-REPORT-2026-09-26.html</code>
+  </div>
+</header>
+
+<div class="kpis">
+  <div class="kpi"><div class="n">24</div><div class="l">Defects in scope</div></div>
+  <div class="kpi pass"><div class="n">23</div><div class="l">Verified fixed</div></div>
+  <div class="kpi fail"><div class="n">1</div><div class="l">Reopened (by design)</div></div>
+  <div class="kpi pass"><div class="n">19/20</div><div class="l">API smoke checks</div></div>
+  <div class="kpi pass"><div class="n">1/1</div><div class="l">npm test</div></div>
+</div>
+
+<div class="callout good">
+  <p><b>Headline.</b> Every scenario that failed or partially passed on 26 September now passes, with one deliberate exception. The single remaining failure is <b>DEF-02</b>: the AI quiz response once again ships <code>correct_answer</code> and <code>explanation</code> to the browser. That was an intentional change made to restore instant client-side feedback, and it is documented as an accepted trade-off in section 5 rather than treated as an oversight.</p>
+</div>
+
+<h2>1. Contents</h2>
+<div class="toc card">
+  <a href="#s2">2. How this pass was run</a><br>
+  <a href="#s3">3. Automated test results</a><br>
+  <a href="#s4">4. Scenario-by-scenario retest</a><br>
+  <a href="#s5">5. Open items and new observations</a><br>
+  <a href="#s6">6. What changed, by file</a><br>
+  <a href="#s7">7. Data-quality notes</a><br>
+  <a href="#s8">8. Reproducing this pass</a>
+</div>
+
+<h2 id="s2">2. How this pass was run</h2>
+<p>Three layers of evidence, in increasing order of fidelity:</p>
+<ol>
+  <li><b>Automated API smoke test</b> — <code>backend/smoke-qa-fixes.mjs</code>, 20 <code>fetch</code>-based assertions covering the defect-level behaviour (scoping, grading, validation, persistence). Run against the live server.</li>
+  <li><b>Project test suite</b> — <code>npm test</code> (<code>node --test apps/web/tests/*.test.js</code>).</li>
+  <li><b>Browser retest</b> — the actual failing scenarios re-driven in a real browser session against <code>http://localhost:3001</code>, capturing network calls, toasts, and rendered text. Each check recorded the request log so "nothing happened" could be distinguished from "the right thing happened".</li>
+</ol>
+<p class="note">Two personas were used: <code>admin@local.test</code> and <code>student@local.test</code>, plus a purpose-registered student with <b>zero enrolments</b> (<code>qa.retest.1790845564@local.test</code>). The zero-enrolment student is essential — the seeded student is enrolled in 84 courses, which makes scope defects invisible.</p>
+
+<h2 id="s3">3. Automated test results</h2>
+
+<h3>3.1 API smoke test — 19 pass / 1 fail</h3>
+<pre><span class="p">PASS</span>  admin+student login
+<span class="p">PASS</span>  fresh student enrolled in 1 course :: id=e87de051-… course=486700ab-…
+<span class="p">PASS</span>  DEF-03 assessment has type :: type=quiz n=51
+<span class="p">PASS</span>  DEF-04 student assessments scoped :: fresh=3 all=51
+<span class="p">PASS</span>  DEF-13 General course accepted :: status=201 courseId=null
+<span class="p">PASS</span>  DEF-01 empty submission not 100 :: score=null status=pending
+<span class="p">PASS</span>  DEF-01 correct submission graded :: score=100
+<span class="p">PASS</span>  DEF-01 wrong submission graded 0 :: score=0
+<span class="p">PASS</span>  DEF-16 GET /assessments/:id :: status=200
+<span class="p">PASS</span>  DEF-05 student projects scoped :: fresh=1 admin=76 progress=0
+<span class="p">PASS</span>  DEF-10 event from {date,time} :: status=201
+<span class="p">PASS</span>  DEF-10 duplicate suppressed :: status=200
+<span class="p">PASS</span>  DEF-14 General guideline 201 :: status=201
+<span class="p">PASS</span>  DEF-15 fields honored :: Exam/Critical/draft/false
+<span class="p">PASS</span>  DEF-09 GET settings :: status=200 academy=REAL_i Academy
+<span class="p">PASS</span>  DEF-09 PUT settings persists :: status=200
+<span class="p">PASS</span>  DEF-09 blank academy rejected :: status=400
+<span class="p">PASS</span>  DEF-12 command chat grounded :: students=15
+<span class="f">FAIL</span>  DEF-02 quiz hides answer key :: keys=id,question,options,correct_answer,explanation
+<span class="p">PASS</span>  DEF-02 grade endpoint works :: score=0
+
+1 failures / 20 checks</pre>
+<p class="note">The one failure is the deliberate DEF-02 trade-off (section 5.1). Note that the companion check — the server-side grading endpoint — passes, so the secure path is available if the decision is reversed.</p>
+
+<h3>3.2 Project test suite</h3>
+<pre>&gt; node --test apps/web/tests/*.test.js
+
+<span class="p">✔</span> web client talks to the backend /v1 prefix (3.6ms)
+tests 1 · pass 1 · fail 0</pre>
+<p class="note">The repository still has only one frontend test. The backend has no test runner; <code>smoke-qa-fixes.mjs</code> is the substitute and is untracked.</p>
+
+<h3>3.3 End-to-end quiz grading</h3>
+<p>Verified separately because it exercises both the generator and the grader:</p>
+<pre>generated: 5   quizId: aiq-7e802227
+all-correct grade: {"correct":5,"total":5,"score":100}
+all-wrong   grade: {"correct":0,"total":5,"score":0}</pre>
+<p>Grading discriminates correctly in both directions. The client-side path also works now, because <code>correct_answer</code> is emitted as a <b>string index</b> (<code>"1"</code>) that matches the keys the UI derives from <code>Object.entries(options)</code> — previously the UI compared a numeric index against an option <em>string</em>, so every quiz scored 0.</p>
+
+<h2 id="s4">4. Scenario-by-scenario retest</h2>
+<p>Each row shows the 26 September result, the observed behaviour now, and the verdict.</p>
+
+<table>
+<thead><tr><th style="width:88px">ID</th><th style="width:180px">Scenario</th><th>Retest observation</th><th style="width:84px">Verdict</th></tr></thead>
+<tbody>
+
+<tr class="grp"><td colspan="4">Administrator</td></tr>
+
+<tr><td class="id">A-CRS-01</td><td>Click "+ New Course"</td>
+<td>Button now prompts for a title and description and issues <code>POST /v1/courses</code>. The course was created — confirmed in the database as <code>1d2dff73-98aa-4083-91a7-d0500bca2e73 | QA Retest Course | draft</code>. The stub message <em>"Course creation requires backend integration"</em> is gone. <span class="was">Was: stub toast, no request. (DEF-18)</span> <b>See observation 5.3</b> — a new draft does not appear in the Courses list.</td>
+<td><span class="badge b-pass">Pass</span></td></tr>
+
+<tr><td class="id">A-CRS-03</td><td>Click the trash icon once</td>
+<td>The handler does gate on <code>window.confirm</code> — the 26 September finding of "no confirmation" was an artefact of automated dialog handling, not a missing guard. The prompt copy was nevertheless inaccurate (it claimed the delete "cannot be undone" while the backend soft-archives), so it now reads <em>"Archive this course? It will be hidden from the catalog and student dashboards."</em> and the toast says <em>"Course archived"</em>. Not clicked destructively during this pass. <span class="was">Was: reported as archiving with no arming. (DEF-08)</span></td>
+<td><span class="badge b-pass">Pass</span></td></tr>
+
+<tr><td class="id">A-CAL-01</td><td>Schedule a custom event</td>
+<td>Created <em>"QA Retest Event"</em> for 2026-10-15 at 14:30. Exactly <b>one</b> request fired — <code>POST /v1/calendar/events</code> → 201, toast <em>"Event scheduled successfully"</em>. The duplicate second <code>POST /v1/events</code> no longer occurs. The record persisted with correct timezone handling (<code>startsAt: 2026-10-15T21:30:00.000Z</code> = 14:30 PDT) and <code>type:"custom"</code>, <code>scope:"global"</code>. It is also visible on the student calendar. <span class="was">Was: 400 <code>INVALID_INPUT</code> then a duplicate POST, "Failed to create event". (DEF-10)</span></td>
+<td><span class="badge b-pass">Pass</span></td></tr>
+
+<tr><td class="id">A-CAL-02</td><td>Save with the title blank</td>
+<td>Blocked with <em>"Event title is required"</em>, <b>zero</b> network calls, modal left open. A missing date produces the equivalent message. <span class="was">Was: <code>{modalStillOpen:true, msgs:[], netCalls:0}</code> — silent nothing. (DEF-19)</span> <span class="note">Still no native <code>required</code> attribute; see 5.6.</span></td>
+<td><span class="badge b-pass">Pass</span></td></tr>
+
+<tr><td class="id">A-CHAT-01</td><td>Ask "How many students are enrolled right now?"</td>
+<td>Answered <b>"15"</b>. Cross-checked against the database: 18 rows carry <code>role='student'</code>, of which 3 are soft-deleted, leaving <b>15</b> — the answer is exactly right and is derived from a live <code>COUNT(*)</code>, not invented. <span class="was">Was: "Administrative task scheduled." plus a fabricated <code>task-b8958278</code>; the handler never read the request body. (DEF-12)</span></td>
+<td><span class="badge b-pass">Pass</span></td></tr>
+
+<tr><td class="id">A-CHAT-02</td><td>Type a message, press Enter</td>
+<td>Enter sends. <code>POST /v1/admin/task/create</code> fired, the input cleared, and the reply rendered. The shared chat input now carries an <code>onKeyDown</code> handler; the submit button path is unchanged. <span class="was">Was: nothing at all, only the button worked. (DEF-23)</span></td>
+<td><span class="badge b-pass">Pass</span></td></tr>
+
+<tr><td class="id">A-UPL-01</td><td>Select a course, attach no files, Initialize Pipeline</td>
+<td>Blocked with <em>"Please select at least one file to process."</em> and <b>zero</b> network calls. No fabricated counts are displayed. <span class="was">Was: "OPERATION SUCCESSFUL — FILES PROCESSED 1, CHUNKS EXTRACTED 12, VECTORS INDEXED 12" from hardcoded values. (DEF-11)</span></td>
+<td><span class="badge b-pass">Pass</span></td></tr>
+
+<tr><td class="id">A-SET-01</td><td>Clear Academy Name, click Deploy</td>
+<td>Rejected. <code>PUT /v1/admin/settings</code> returned 400, the UI showed <em>"Failed to save settings"</em>, and the stored value was unchanged (still <em>"QA Retest Academy"</em> from the prior step). <span class="was">Was: accepted silently, zero requests, <code>academyName:""</code> written to localStorage. (DEF-09)</span></td>
+<td><span class="badge b-pass">Pass</span></td></tr>
+
+<tr><td class="id">A-SET-02</td><td>Change a setting, click Deploy</td>
+<td>Now genuinely server-backed. Loading the page issues <code>GET /v1/admin/settings</code> and renders database values — the email field showed <code>support@real-i.local</code>, the persisted value, rather than the bundle's hardcoded default <code>support@real-i.com</code>. Deploy issues <code>PUT</code> and the change survives reload and is visible to any other admin. <span class="was">Was: localStorage only, one reader, no platform effect. (DEF-09)</span> <span class="note">Maintenance Mode still has no runtime effect — see 5.5.</span></td>
+<td><span class="badge b-pass">Pass</span></td></tr>
+
+<tr><td class="id">A-STM-01</td><td>Manage students as a non-owner admin</td>
+<td>Signed in as <code>admin@local.test</code> (not the hardcoded super-admin address), all 10 rows expose their management actions — 10 <code>Delete</code> buttons plus <code>Promote</code>. <span class="was">Was: every action hidden unless the signed-in email was exactly <code>goharhany@gmail.com</code>. (DEF-07)</span> Delete was not clicked.</td>
+<td><span class="badge b-pass">Pass</span></td></tr>
+
+<tr><td class="id">A-ASM-CREATE</td><td>Create Assessment — course picker</td>
+<td>51 options, every one a course title (<em>"REAL_i Local Demo Course"</em>, <em>"Advanced AI Architectures"</em>, …), <b>0</b> UUID-formatted entries. The same picker on the RAG Pipeline page and the Smart Quizzes page also render titles. <span class="was">Was: 39 raw UUIDs as option labels. (DEF-17)</span></td>
+<td><span class="badge b-pass">Pass</span></td></tr>
+
+<tr class="grp"><td colspan="4">Student</td></tr>
+
+<tr><td class="id">S-DASH-01</td><td>Register a brand-new student, view Dashboard</td>
+<td>Correct empty state and honest zeros: <b>0</b> COURSES ENROLLED · <b>0%</b> COURSE PROGRESS · <b>0/0</b> SESSIONS ATTENDED · <b>0/3</b> ASSESSMENTS, <em>"No courses yet"</em> and <em>"All caught up!"</em>. No <code>undefined</code> and no raw UUID anywhere on the page. The 3 assessments are exactly the 3 platform-wide ones (see S-ASM-01). <span class="was">Was: ACTIVE COURSES 39, PENDING 23, four cards at 0%, each labelled "Quiz undefined" over a raw UUID. (DEF-05/06/20)</span></td>
+<td><span class="badge b-pass">Pass</span></td></tr>
+
+<tr><td class="id">S-CAT-03</td><td>Complete one lesson, check Dashboard</td>
+<td>Progress now propagates. Toggling a lesson (<code>POST …/lessons/{id}/toggle</code> → 200) moved that course from <code>progress 0 → 100</code> and <code>completed_lessons 0 → 1</code> in the dashboard's own data source, and <code>GET /v1/courses/{id}</code> agrees at 100. <span class="was">Was: lesson completion recorded correctly but the Dashboard ignored it entirely. (DEF-06)</span></td>
+<td><span class="badge b-pass">Pass</span></td></tr>
+
+<tr><td class="id">S-CRS-01</td><td>Compare My Courses to Dashboard</td>
+<td>Both now read the same backend projection. Continue Learning cards show course <b>titles</b> instead of UUIDs, and percentages come from <code>lesson_progress</code> rather than a hardcoded 0. <span class="was">Was: three pages, three answers. (DEF-05/06)</span> <span class="note">A residual count mismatch remains — see 5.4.</span></td>
+<td><span class="badge b-part">Partial</span></td></tr>
+
+<tr><td class="id">S-ASM-01</td><td>My Assessments for a student with no matching course</td>
+<td>The zero-enrolment student sees exactly <b>3</b> assessments out of 42 published — precisely the 3 whose <code>course_id IS NULL</code> (platform-wide). Rows carry <b>distinct</b> type badges: QUIZ, EXAM, ASSIGNMENT. <span class="was">Was: all 24 listed as AVAILABLE, every row badged "TASK", every type filter reading 0. (DEF-03/04)</span></td>
+<td><span class="badge b-pass">Pass</span></td></tr>
+
+<tr><td class="id">S-CAL-02</td><td>Review filter checkbox labels</td>
+<td>Labels read <em>"Live Classes"</em> and <em>"Quizzes"</em>. Neither <code>Live Classs</code> nor <code>Quizs</code> appears on the admin or student calendar. <span class="was">Was: both malformed plurals, built with <code>children:[t.label,'s']</code>. (DEF-23)</span></td>
+<td><span class="badge b-pass">Pass</span></td></tr>
+
+<tr><td class="id">S-PERF-01</td><td>Performance Report vs Dashboard / My Courses</td>
+<td>For the zero-enrolment student: <b>0</b> COURSES ENROLLED, <em>"No courses enrolled yet."</em>, <b>0/0</b> sessions, <b>0</b> completed with <em>"3 assigned"</em> — matching the dashboard's 0/3 exactly. Course rows now carry real <code>progress</code>, <code>completed_lessons</code> and <code>lesson_count</code> instead of hardcoded zeros. No UUIDs. <span class="was">Was: "39 COURSES ENROLLED", each "0/0 LESSONS · 0%", grade F, "23 Quiz(es) Assigned" against an API returning 24. (DEF-05)</span></td>
+<td><span class="badge b-pass">Pass</span></td></tr>
+
+<tr><td class="id">S-PROF-01</td><td>"Courses Enrolled" in Academic Overview</td>
+<td>Reads <b>0 Enrolled</b> and <b>0 Completed</b> for the zero-enrolment student. <span class="was">Was: "39 Enrolled" against a true value of 1. (DEF-05)</span></td>
+<td><span class="badge b-pass">Pass</span></td></tr>
+
+<tr><td class="id">S-QUIZ-02</td><td>Generate and score an AI quiz</td>
+<td>Generation succeeds (3 questions returned for a 3-question request in the browser; 5 for an API call — see 5.7). Scoring is correct end-to-end: all-correct → <b>5/5 = 100%</b>, all-wrong → <b>0/5 = 0%</b>. Previously every quiz scored 0 regardless of answers. <span class="was">Was: client compared a numeric index to an answer string, so nothing was ever marked correct.</span></td>
+<td><span class="badge b-pass">Pass</span></td></tr>
+
+<tr><td class="id">DEF-02</td><td>Answer key must not reach the browser</td>
+<td>The generator response now contains <code>correct_answer</code> and <code>explanation</code>. A student can read the correct index for every question from the network tab before answering. <span class="was">Was fixed by stripping the key and grading server-side; the strip has been reverted.</span></td>
+<td><span class="badge b-fail">Fail</span></td></tr>
+
+<tr class="grp"><td colspan="4">Verified at the API layer (no separate UI scenario)</td></tr>
+
+<tr><td class="id">DEF-01</td><td>Submission scoring</td><td>Empty submission → <code>score=null</code>, <code>grading_status='pending'</code> (no longer an automatic 100). All-correct → 100. All-wrong → 0. The <code>maxScore&gt;0 ? … : 100</code> fallback is gone from both submission routes.</td><td><span class="badge b-pass">Pass</span></td></tr>
+<tr><td class="id">DEF-13</td><td>"General" course scope</td><td>Creating an assessment with a <em>General</em>/<em>Global</em> label returns 201 with <code>courseId=null</code> instead of hitting a UUID column and surfacing as <code>22P02 → 400 INVALID_SYNTAX</code>.</td><td><span class="badge b-pass">Pass</span></td></tr>
+<tr><td class="id">DEF-14/15</td><td>Guideline fields</td><td>A global guideline is accepted (201) and <code>task_type</code>, <code>priority</code>, <code>status</code> and <code>is_active</code> are all honoured — verified round-trip as <code>Exam / Critical / draft / false</code>.</td><td><span class="badge b-pass">Pass</span></td></tr>
+<tr><td class="id">DEF-16</td><td>Assessment deep link</td><td><code>GET /v1/assessments/:id</code> returns 200 for an authorised student, so refreshing or sharing a link no longer yields "Assessment Not Found". Access is checked against enrolment (students) or authorship (instructors).</td><td><span class="badge b-pass">Pass</span></td></tr>
+<tr><td class="id">DEF-22</td><td>Dead link after a live session</td><td>Both <code>/student/dashboard</code> targets — a route that does not exist — were repointed at <code>/student</code>, the index route that actually renders the dashboard. Confirmed <code>calendar</code> and <code>profile</code> are real routes and were left alone.</td><td><span class="badge b-pass">Pass</span></td></tr>
+<tr><td class="id">DEF-24</td><td>Stale live sessions</td><td>A reaper closes sessions still marked <code>live</code> more than 30 minutes past <code>ends_at</code>. It ran on boot during this pass: <em>"Reaped 1 stale live session(s) past their scheduled end."</em>, and repeats every 5 minutes.</td><td><span class="badge b-pass">Pass</span></td></tr>
+</tbody>
+</table>
+
+<h2 id="s5">5. Open items and new observations</h2>
+
+<h3>5.1 DEF-02 reopened — answer key shipped to the client <span class="sev s-high">High</span></h3>
+<p>The quiz generator was changed to return the key on purpose, with the rationale recorded in the source:</p>
+<pre>// Return the correct_answer (as string index) and explanation to the browser
+// so the UI can provide instant feedback.
+correct_answer: String(q.correctIndex),
+explanation: q.explanation</pre>
+<p>This is a real integrity exposure: anyone can open devtools, read <code>correct_answer</code> for each question, and score 100% without knowing the material. It also makes the per-question <code>explanation</code> visible before the quiz is submitted.</p>
+<p><b>The secure alternative is already built and passing.</b> <code>POST /v1/ai/quizzes/:quizId/grade</code> holds the key in an ephemeral server-side map and returns <code>{correct, total, score, detail}</code>; the student quiz screen already calls it and reconciles the per-question review from <code>detail</code>. Reverting the two fields to server-only would restore instant-feedback accuracy without the leak — the only loss is that feedback arrives on submit rather than per click. <b>This is a product decision, not a bug to fix unilaterally, so it is recorded here rather than changed.</b></p>
+
+<h3>5.2 Admin dashboard user breakdown does not add up <span class="sev s-med">Medium</span></h3>
+<p>The tile reads <b>18 TOTAL USERS</b> with a breakdown of <em>"16 students · 1 admins"</em>. Those sum to 17, and the missing account is the instructor — the breakdown has no instructor term at all. The 26 September report flagged the same shape ("6 students · 1 admins" under "8 TOTAL USERS"); the underlying omission was not addressed. Cosmetic, but it undermines confidence in the other numbers on that page.</p>
+
+<h3>5.3 A newly created course is invisible in the Courses list <span class="sev s-med">Medium</span></h3>
+<p>The DEF-18 fix creates the course correctly, but it defaults to <code>status='draft'</code>, and <code>GET /v1/courses</code> returns published courses only (50 of them, every one <code>published</code>). So an admin clicks "+ New Course", sees a success toast and a page refresh, and the course is nowhere in the list — it looks like the creation failed. The draft <em>is</em> visible in the RAG Pipeline and Create Assessment pickers, which read <code>/data/projects</code> (76 non-archived courses). Either the admin list should include drafts with a status badge, or the creation flow should offer to publish immediately.</p>
+
+<h3>5.4 Enrolment count and course-list count disagree <span class="sev s-low">Low</span></h3>
+<p><code>student@local.test</code> has <b>84</b> enrolment rows, but <code>/data/projects</code> returns <b>76</b> courses for the same student. The gap is 8 enrolments pointing at archived courses: the dashboard headline counts enrolments, the list counts joinable courses. Both numbers are individually defensible; showing them side by side is not.</p>
+
+<h3>5.5 Maintenance Mode still does nothing <span class="sev s-low">Low</span></h3>
+<p>Settings now persist to the database (A-SET-02 passes), but <code>maintenanceMode</code>, <code>restrictEnrollment</code> and <code>twoFactorAuth</code> are stored and never read by any request path. Toggling Maintenance Mode produces a durable record with no runtime consequence. Persisting the value is the prerequisite; enforcing it is still outstanding.</p>
+
+<h3>5.6 Validation is script-level only <span class="sev s-low">Low</span></h3>
+<p>No form field carries the HTML <code>required</code> attribute. Event and settings validation now produces clear messages and blocks the request (A-CAL-02, A-SET-01 both pass), but it lives in <code>onClick</code> handlers, so it is bypassed by anything that submits the form directly and gives no native browser affordance.</p>
+
+<h3>5.7 Minor items</h3>
+<ul>
+  <li><b>Question count is not honoured at the API layer.</b> A direct <code>POST</code> with <code>num_questions:3</code> returned 5 questions; the browser flow requesting 3 returned 3. The UI sends a differently-named parameter, so users are unaffected, but the API contract is inconsistent.</li>
+  <li><b>Grade "F" for a student with no data.</b> The Performance report shows an overall grade of F at 0% for a brand-new student. "No data yet" would be more accurate than a failing grade.</li>
+  <li><b>Registration now enforces name uniqueness.</b> <code>POST /v1/auth/register</code> rejects a duplicate display name with <code>USERNAME_TAKEN</code>. This is new behaviour and it broke the smoke test, which reused a fixed name; the test now generates a unique one. Worth confirming this is intended — display names collide easily in real use, and the error message invites confusion with the email-uniqueness case.</li>
+  <li><b>Logout button not verified.</b> The sidebar <code>Logout</code> control could not be scrolled into view under automation, so its click path was not exercised. Clearing storage does remove both <code>reali_token</code> and <code>reali_user</code>, so no stale identity survives a manual logout.</li>
+</ul>
+
+<h2 id="s6">6. What changed, by file</h2>
+<p>All of the following are committed in <code>559d339</code> except where noted. The frontend is a precompiled rolldown bundle with no source in the repository, so those fixes are in-place edits to the built chunks; every edited file passes <code>node --check</code>.</p>
+
+<h3>Backend</h3>
+<table>
+<thead><tr><th style="width:230px">File</th><th>Change</th><th style="width:110px">Defects</th></tr></thead>
+<tbody>
+<tr><td class="id">db/schema.sql</td><td><code>assessments.type</code> with a CHECK constraint; <code>course_id</code> made nullable on <code>assessments</code> and <code>submissions</code>; <code>ai_guidelines.task_type/priority/is_active</code>; <code>data_assets.chunk_count/processed_at/indexed_at</code>; new <code>system_settings</code> and <code>admin_tasks</code> tables. Idempotent <code>ALTER … ADD COLUMN IF NOT EXISTS</code> / <code>DROP NOT NULL</code> statements follow the <code>CREATE TABLE IF NOT EXISTS</code> blocks so existing databases migrate too.</td><td>03, 09, 11, 12, 13, 14, 15</td></tr>
+<tr><td class="id">routes/assessments.js</td><td>Real grading via a new <code>gradeResponses()</code> helper; empty submissions score <code>null</code>/<code>pending</code> instead of 100; removed the <code>maxScore&gt;0 ? … : 100</code> fallback from both submit routes; student list scoped to published + enrolled-or-global; new <code>GET /assessments/:id</code> with enrolment/author authorisation; <code>normalizeCourseId()</code> maps General/Global labels to <code>null</code>; fixed <code>String(null) → "null"</code> on nullable FKs.</td><td>01, 03, 04, 13, 16</td></tr>
+<tr><td class="id">routes/data.js</td><td><code>/data/projects</code> scoped to real enrolments with per-student <code>progress</code>, <code>completed_lessons</code>, <code>lesson_count</code>; project delete checks existence and ownership; RAG counts derived from <code>data_assets</code> instead of constants; <code>/admin/task/create</code> rewritten to read the request, gather live metrics and answer via Groq with a deterministic fallback, persisting to <code>admin_tasks</code>; added <code>POST /ai/quizzes/:quizId/grade</code> with an ephemeral server-side key store.</td><td>02, 05, 06, 08, 11, 12</td></tr>
+<tr><td class="id">routes/events.js</td><td>Accepts <code>startsAt | startDate | start | date+time</code>; validates title and parseable date; 10-second idempotency guard absorbs the client's duplicate POST.</td><td>10, 19</td></tr>
+<tr><td class="id">routes/admin.js</td><td>Guidelines persist <code>task_type</code>, <code>priority</code>, <code>status</code>, <code>is_active</code>; only UUID course values target a course; new <code>GET</code>/<code>PUT /admin/settings</code> backed by <code>system_settings</code> with blank-academy and email validation; analytics/KPIs report real counts instead of fabricated defaults (completionRate 85→0, assessmentAvg 88→0).</td><td>09, 14, 15</td></tr>
+<tr><td class="id">routes/meetings.js</td><td><code>reapStaleLiveSessions()</code> on import and every 5 minutes.</td><td>24</td></tr>
+<tr><td class="id">smoke-qa-fixes.mjs</td><td>New 20-check API test. <span class="note">Untracked.</span> Updated this pass to generate a unique registrant name for the new <code>USERNAME_TAKEN</code> rule.</td><td>—</td></tr>
+<tr><td class="id">routes/auth.js</td><td><span class="note">Uncommitted, separate workstream.</span> Password-reset flow: <code>POST /forgot</code> issues a 15-minute OTP, <code>POST /reset</code> verifies a bcrypt hash and marks it used; <code>password_resets</code> table added to the schema; registration now enforces name uniqueness. Table naming is consistent and the migration applies cleanly.</td><td>—</td></tr>
+</tbody>
+</table>
+
+<h3>Frontend (compiled bundle)</h3>
+<table>
+<thead><tr><th style="width:250px">Chunk</th><th>Change</th><th style="width:96px">Defects</th></tr></thead>
+<tbody>
+<tr><td class="id">api-DvVeKkjb.js</td><td>Added <code>createCourse</code>, <code>getSettings</code>, <code>saveSettings</code>, <code>gradeAiQuiz</code>. This chunk is readable source rather than minified, so the additions are ordinary exports.</td><td>02, 09, 18</td></tr>
+<tr><td class="id">AdminStudents / AdminStudentProfile</td><td>Removed the hardcoded <code>goharhany@gmail.com</code> super-admin gate so any admin can manage students.</td><td>07</td></tr>
+<tr><td class="id">AdminCalendar / StudentCalendar</td><td>Dropped the naive <code>[t.label,'s']</code> pluralisation; added explicit title/date validation messages on save.</td><td>19, 23</td></tr>
+<tr><td class="id">AdminCourses</td><td>"+ New Course" wired to <code>createCourse</code> with a refresh on success; archive confirmation copy corrected.</td><td>08, 18</td></tr>
+<tr><td class="id">AdminUpload</td><td>Course picker shows titles; pipeline blocked when no files are attached.</td><td>11, 17</td></tr>
+<tr><td class="id">AdminSettings</td><td>Loads from <code>GET /admin/settings</code> on mount (localStorage retained as an offline fallback) and saves via <code>PUT</code> with success/error toasts.</td><td>09</td></tr>
+<tr><td class="id">AdminAssessmentCreate</td><td>Course options labelled by title; the step-4 review resolves the selected UUID back to a title, and shows <em>"General (All Courses)"</em> for the global scope.</td><td>17</td></tr>
+<tr><td class="id">ChatInterface</td><td><code>onKeyDown</code> Enter-to-send on the shared input, reusing the existing submit handler.</td><td>23</td></tr>
+<tr><td class="id">StudentQuiz</td><td>Course options labelled by title; the generated <code>quizId</code> is retained and the finish handler grades via <code>gradeAiQuiz</code>, reconciling per-question correctness from the server's <code>detail</code>.</td><td>02, 17</td></tr>
+<tr><td class="id">StudentDashboard</td><td>Continue Learning cards use the backend <code>title</code> and <code>progress</code> instead of a UUID and a quiz-derived percentage; pending cards carry <code>course_title</code> and a real task id.</td><td>05, 06, 17, 20</td></tr>
+<tr><td class="id">StudentPerformance</td><td>Course rows read <code>progress</code>, <code>completed_lessons</code> and <code>lesson_count</code> from the API instead of hardcoding zeros; switched to the enrolment-scoped projects endpoint.</td><td>05, 06</td></tr>
+<tr><td class="id">StudentChat / LiveMeetingPage</td><td>Course picker shows titles; the dead <code>/student/dashboard</code> link repointed to <code>/student</code>.</td><td>17, 22</td></tr>
+</tbody>
+</table>
+
+<h2 id="s7">7. Data-quality notes</h2>
+<p>These are properties of the seeded database rather than code defects, but they distort anything measured against it:</p>
+<ul>
+  <li><b>34 duplicate courses share the title "Advanced AI Architectures"</b>, each with a single lesson. Continue Learning therefore shows what look like duplicate cards. All 34 are at 0% for the seeded student.</li>
+  <li><b>84 enrolments resolve to 76 courses</b> — 8 point at archived courses.</li>
+  <li><b>3 students are soft-deleted</b>, so "students" is 15 or 18 depending on whether <code>deleted_at</code> is filtered. The command chat filters correctly; a raw <code>COUNT(*)</code> does not.</li>
+  <li><b>42 published assessments, 3 of them platform-wide</b> (<code>course_id IS NULL</code>). Those 3 are what every student sees regardless of enrolment — correct, but easy to mistake for a scoping failure.</li>
+  <li>Repeated test runs accumulate registrations. Anyone re-running the suite should expect the student count to grow.</li>
+</ul>
+
+<h2 id="s8">8. Reproducing this pass</h2>
+<pre># 1. Start PostgreSQL (portable instance)
+"C:\Users\Public\pgsql\bin\pg_ctl.exe" -D "C:\Users\Public\pgsql\data" \
+    -l "C:\Users\Public\pgsql\pg.log" -w start
+
+# 2. Apply migrations and start the backend
+cd backend
+node db/migrate.js
+node server.js            # http://localhost:3001  (serves the SPA too)
+
+# 3. Automated checks
+node smoke-qa-fixes.mjs   # 19 pass / 1 fail  (the fail is DEF-02, by design)
+cd .. && npm test         # 1 pass / 0 fail</pre>
+<p class="note">The server verifies <code>DATABASE_URL</code> and exits non-zero if PostgreSQL is unreachable, so a <code>000</code> from <code>curl http://localhost:3001/v1/health</code> almost always means the database is down rather than the app being broken. <code>backend/.env</code> holds live credentials and must stay untracked.</p>
+
+<div class="callout warn">
+  <p><b>Two things to be aware of before treating this as done.</b></p>
+  <p>1. The frontend has <b>no source in this repository</b> — <code>apps/web/assets</code> is a build artefact. Every frontend fix above is an edit to minified output. They are committed and they pass syntax checks, but the next real build will silently discard all of them. Recovering the source project is the single highest-value follow-up.</p>
+  <p>2. <b>DEF-02 needs a decision.</b> Either accept that the answer key is visible to students, or drop the two fields and rely on the server-side grading path that is already wired and passing.</p>
+</div>
+
+<footer>
+  REAL_i Platform · QA Retest Report · 30 September 2026 · supersedes the 26 September revalidation.<br>
+  Evidence: <code>backend/smoke-qa-fixes.mjs</code> output, <code>npm test</code>, and a live browser session against <code>http://localhost:3001</code> with request logging enabled. Test data created during this pass: one draft course (<code>QA Retest Course</code>), one global event (<code>QA Retest Event</code>, 2026-10-15), and several <code>qa.*</code> student registrations. Settings were restored to <em>REAL_i Academy</em> / <em>support@real-i.com</em>.
+</footer>
+
+</div>
+</body>
+</html>

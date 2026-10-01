@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>REAL_i — QA Revalidation · 29 Sep 2026</title>
+  <style>
+    :root{color-scheme:dark;--bg:#0b1020;--panel:#121a2e;--panel2:#17223a;--line:#293651;--text:#edf2ff;--muted:#9caac3;--gold:#e3ba68;--red:#fb7185;--green:#4ade80;--amber:#fbbf24;--blue:#7dd3fc}
+    *{box-sizing:border-box}body{margin:0;background:radial-gradient(1000px 520px at 12% -5%,#263350 0%,transparent 55%),var(--bg);color:var(--text);font:15px/1.5 Inter,Segoe UI,Arial,sans-serif}
+    main{max-width:1220px;margin:0 auto;padding:38px 24px 72px}.eyebrow{color:var(--gold);font-size:12px;font-weight:800;letter-spacing:.17em;text-transform:uppercase}h1{font-size:clamp(30px,5vw,48px);line-height:1.08;margin:10px 0 12px;letter-spacing:-.04em}h2{font-size:21px;margin:30px 0 12px}p{margin:8px 0;color:var(--muted)}.lede{font-size:17px;max-width:880px}.banner{margin:22px 0;padding:16px 18px;background:#30240f;border:1px solid #80612c;border-radius:14px;color:#ffedbf}.banner strong{color:#fff4d6}.meta{display:flex;flex-wrap:wrap;gap:8px;margin:17px 0 26px}.chip{padding:6px 10px;border:1px solid var(--line);border-radius:999px;color:var(--muted);font-size:12px;background:#11192b}.cards{display:grid;grid-template-columns:repeat(4,minmax(120px,1fr));gap:12px;margin:20px 0 28px}.card{background:linear-gradient(150deg,var(--panel2),var(--panel));border:1px solid var(--line);padding:16px;border-radius:16px}.card b{display:block;font-size:27px;line-height:1.1}.card span{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.08em}.card.pass b{color:var(--green)}.card.fail b{color:var(--red)}.card.partial b{color:var(--amber)}.card.blocked b{color:var(--blue)}
+    .callouts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.callout{border:1px solid var(--line);background:var(--panel);border-radius:14px;padding:15px 17px}.callout h3{font-size:14px;margin:0 0 5px}.callout p{font-size:13px;margin:0}.fail-title{color:var(--red)}.partial-title{color:var(--amber)}.pass-title{color:var(--green)}
+    .toolbar{display:flex;gap:10px;flex-wrap:wrap;margin:14px 0}.toolbar input,.toolbar select{font:inherit;color:var(--text);background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 12px}.toolbar input{flex:1;min-width:230px}.table-wrap{overflow:auto;border:1px solid var(--line);border-radius:14px;background:#0e1628}table{border-collapse:collapse;width:100%;min-width:960px}th,td{text-align:left;padding:12px 13px;border-bottom:1px solid #202c43;vertical-align:top}th{position:sticky;top:0;background:#17223a;color:#bdc9df;font-size:11px;text-transform:uppercase;letter-spacing:.08em;z-index:1}td{font-size:13px}td.id{font-family:ui-monospace,Consolas,monospace;color:#cbd5e1;white-space:nowrap}td.evidence{color:var(--muted);max-width:390px}.badge{display:inline-block;border-radius:999px;padding:3px 8px;font-size:10px;font-weight:800;letter-spacing:.06em;white-space:nowrap}.badge.pass{background:#123a2b;color:#86efac}.badge.fail{background:#421b2a;color:#fda4af}.badge.partial{background:#3a2d13;color:#fde68a}.badge.blocked{background:#162e42;color:#bae6fd}.section-note{font-size:13px}.evidence-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}.evidence-item{background:var(--panel);border:1px solid var(--line);padding:12px 14px;border-radius:12px;font-size:13px}.evidence-item b{color:var(--text)}footer{margin-top:30px;padding-top:18px;border-top:1px solid var(--line);font-size:12px;color:var(--muted)}
+    @media(max-width:720px){main{padding:25px 14px 50px}.cards{grid-template-columns:repeat(2,minmax(0,1fr))}.callouts,.evidence-list{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+<main>
+  <div class="eyebrow">REAL_i Platform · QA Revalidation</div>
+  <h1>49-Scenario QA Re-run</h1>
+  <p class="lede">Revalidation against the local PostgreSQL build on 29 September 2026. The original scenario list is reproduced below with current evidence and execution status.</p>
+  <div class="banner"><strong>Execution incomplete.</strong> This is not a completed end-to-end rerun. Browser automation failed twice with <code>Transport closed</code>, and a separate browser launch was blocked by the desktop execution policy. The app API was available, so read-only API requests and deployed bundle/backend inspection were completed. Scenarios needing browser actions are marked “Not run” instead of being inferred as passes.</div>
+  <div class="meta"><span class="chip">Target: http://localhost:3001</span><span class="chip">API health: HTTP 200 · database connected</span><span class="chip">Build: 559d339 + current working-tree edits</span><span class="chip">No new QA records created</span></div>
+  <section class="cards" aria-label="Scenario result counts">
+    <div class="card"><b>49</b><span>Scenarios listed</span></div>
+    <div class="card pass"><b id="passCount">0</b><span>Passed checks</span></div>
+    <div class="card fail"><b id="failCount">0</b><span>Confirmed failures</span></div>
+    <div class="card blocked"><b id="blockedCount">0</b><span>Not run / partial</span></div>
+  </section>
+  <h2>Current confirmed issues</h2>
+  <div class="callouts">
+    <article class="callout"><h3 class="fail-title">Answer key is exposed in AI quiz response</h3><p>The live handler builds browser-facing questions with <code>correct_answer</code> (the correct option index) and an explanation. Server-side grading exists, but the client receives the answer key.</p></article>
+    <article class="callout"><h3 class="fail-title">Student/admin averages disagree</h3><p>Live KPI response reported <code>assessmentAvg: 53</code>; the student learning summary reported <code>assessmentAverage: 1000</code>, outside the valid 0–100 range.</p></article>
+    <article class="callout"><h3 class="fail-title">Hardcoded admin identity gate remains</h3><p>The admin student-profile bundle still contains <code>goharhany@gmail.com</code>, so other admins may not see role controls.</p></article>
+    <article class="callout"><h3 class="partial-title">Student fixture cannot validate one-course behavior</h3><p>The seeded student has 82 enrollments and 41 assigned assessments. The learning summary reports 82 courses; <code>/v1/data/projects</code> returns 74, so the old clean-student comparison is unavailable and the catalogue endpoint is inconsistent.</p></article>
+    <article class="callout"><h3 class="pass-title">Empty quiz submission guard is present</h3><p>The current assessment handler leaves answerless submissions pending with a null score; it does not award an automatic 100. Verified by handler inspection, not by creating a submission.</p></article>
+    <article class="callout"><h3 class="pass-title">Assignment file requirement and storage are present</h3><p>The backend rejects assignment/task submissions without a file and stores uploaded bytes in <code>assessment_submission_files.file_data</code>. Admin download routes read the stored bytes. UI upload-and-open flow was not exercised.</p></article>
+  </div>
+  <h2>Scenario log</h2>
+  <p class="section-note">“Pass” and “Fail” are limited to the evidence noted. “Partial” means only part of the scenario was checked. “Not run” means the scenario still requires the browser-based action from the source report.</p>
+  <div class="toolbar"><input id="search" type="search" placeholder="Filter by ID, role, scenario, or evidence…" aria-label="Search scenario log"><select id="filter" aria-label="Filter status"><option value="all">All statuses</option><option value="pass">Pass</option><option value="fail">Fail</option><option value="partial">Partial</option><option value="blocked">Not run</option></select></div>
+  <div class="table-wrap"><table><thead><tr><th>ID</th><th>Role</th><th>Scenario</th><th>Status</th><th>Current evidence / limitation</th></tr></thead><tbody id="rows"></tbody></table></div>
+  <h2>Live read-only evidence</h2>
+  <div class="evidence-list">
+    <div class="evidence-item"><b>Authentication and health:</b> local admin and student login accepted; API health returned healthy with PostgreSQL connected.</div>
+    <div class="evidence-item"><b>Assessments:</b> student GET returned 41 records, with a type on every row (assignment, quiz, task). This account’s 82 course enrollments prevent validating one-course scoping.</div>
+    <div class="evidence-item"><b>Learning summary:</b> 82 enrolled courses, 41 assessments, 1 attended session, and assessment average 1000 for the seeded student.</div>
+    <div class="evidence-item"><b>Submission list:</b> student endpoint returned 25 legacy submissions; four have no assessment reference and none had file metadata for preview verification.</div>
+    <div class="evidence-item"><b>Settings:</b> admin settings GET returned HTTP 200. Deploy/save and maintenance effects were not exercised.</div>
+    <div class="evidence-item"><b>Dashboard presentation:</b> dashboard bundle calls the learning-summary endpoint and no longer includes “My Assessment Submissions”. Visual rendering was not available.</div>
+  </div>
+  <h2>Test integrity notes</h2>
+  <p>The database contains data from earlier QA runs, including many extra users, enrollments, and submissions. I did not register accounts, enroll students, submit assessments, upload files, create events, change profiles/settings, or archive courses in this pass. Login updated the last-login timestamp on the two existing local QA accounts.</p>
+  <p>The workspace’s earlier <code>qa-results-2026-09-29.json</code> predates this run and contains inconsistent result values, so it was not treated as fresh evidence.</p>
+  <footer>REAL_i QA revalidation · 29 September 2026 · Full 49-scenario browser execution remains outstanding because the browser-control service was unavailable.</footer>
+</main>
+<script>
+const cases = [
+['A-ANL-01','Admin','Compare Total Students across analytics and Students','partial','The separate live analytics endpoint was not compared with the Students page. The admin assessment KPI (53) disagrees with the student learning summary (1000), but this does not establish the Total Students scenario result.'],
+['A-ASM-01','Admin','Create an assessment through all wizard steps and publish','blocked','Requires interactive wizard and a write; not exercised without browser control.'],
+['A-ASM-02','Admin','Advance step 1 with a blank title','blocked','Requires interactive wizard validation.'],
+['A-ASM-03','Admin','Advance with incomplete multiple-choice options','blocked','Requires interactive wizard validation.'],
+['A-CAL-01','Admin','Create a custom calendar event and verify it appears','blocked','Would create persistent calendar data; no browser interaction.'],
+['A-CAL-02','Admin','Save calendar event with a blank title','blocked','Requires interactive form validation.'],
+['A-CHAT-01','Admin','Ask Command Chat for a live student count','blocked','Requires sending a chat request and observing the UI response.'],
+['A-CHAT-02','Admin','Send a Command Chat message using Enter','blocked','Requires keyboard interaction.'],
+['A-CHAT-03','Admin','Try to send an empty Command Chat message','blocked','Requires interactive control-state check.'],
+['A-CRS-01','Admin','Open the New Course form','blocked','Requires browser navigation and UI inspection.'],
+['A-CRS-02','Admin','Inspect course overview, curriculum, and students tabs','blocked','Requires browser navigation and UI inspection.'],
+['A-CRS-03','Admin','Check that course archive asks for confirmation','partial','Current course bundle contains window.confirm; confirmation was not triggered.'],
+['A-DASH-01','Admin','Compare dashboard totals to current user data','blocked','API is healthy; dashboard visual values were not inspected.'],
+['A-DATA-01','Admin','Create a guideline with all fields and a course scope','blocked','Would create persistent data; not exercised.'],
+['A-DATA-02','Admin','Submit the Data Manager form blank','blocked','Requires interactive validation.'],
+['A-DATA-03','Admin','Edit/delete a project or asset safely','blocked','Destructive controls were not triggered.'],
+['A-GUID-01','Admin','Compare Guidelines page with Data Manager records','blocked','Guideline endpoint is available, but both UIs were not opened.'],
+['A-LIVE-01','Admin','Launch and verify a live broadcast','blocked','Would change live session state; not exercised.'],
+['A-LIVE-02','Admin','Attempt launch with the default title','blocked','Requires browser interaction.'],
+['A-LIVE-03','Admin','End a live lecture and verify state','blocked','Would mutate live-session state; not exercised.'],
+['A-MEET-01','Admin','Create and launch a scheduled session','blocked','Would create and change meeting data; not exercised.'],
+['A-MEET-02','Admin','Submit a meeting with blank title and date','blocked','Requires interactive form validation.'],
+['A-PROF-01','Admin','Change profile name and verify after reload','blocked','Would modify a real profile; not exercised.'],
+['A-PROF-02','Admin','Save an empty profile name','blocked','Requires interactive form validation.'],
+['A-SET-01','Admin','Clear academy name and deploy configuration','blocked','Would change persistent settings; not exercised.'],
+['A-SET-02','Admin','Toggle maintenance mode and verify platform effect','blocked','Would change persistent settings; not exercised.'],
+['A-STU-01','Admin','Promote a student using admin controls','fail','Student profile bundle still contains the hardcoded goharhany@gmail.com gate. Control was not clicked.'],
+['A-STU-02','Admin','Demote a student using admin controls','partial','Same hardcoded-email gate is present; no role was changed.'],
+['A-UPL-01','Admin','Run RAG pipeline with no selected files','blocked','Requires interactive pipeline action.'],
+['A-UPL-02','Admin','Upload a text file and run targeted processing','blocked','Would upload persistent data; not exercised.'],
+['S-ASM-01','Student','List only assessments relevant to an enrolled course','partial','Live endpoint returned typed assessments, but the seeded student has 82 enrollments; clean one-course scoping could not be established.'],
+['S-ASM-02','Student','Open, complete, and submit an assessment','partial','Backend keeps empty quiz submissions ungraded and requires a file for assignment/task submissions; UI route and end-to-end submission were not exercised.'],
+['S-CAL-01','Student','Check that calendar has no event creation controls','pass','Student calendar bundle is present; static check found no Create/Schedule/New/Add Event affordance.'],
+['S-CAL-02','Student','Check calendar filter checkbox labels','blocked','Calendar page was not visually opened.'],
+['S-CAT-01','Student','Open course detail and inspect curriculum','blocked','Course API data is available, but displayed course detail was not inspected.'],
+['S-CAT-02','Student','Start a free course and enter lesson player','blocked','Would enroll the account and change progress; not exercised.'],
+['S-CAT-03','Student','Complete a lesson and verify dashboard progress','blocked','Would mutate lesson progress; not exercised.'],
+['S-CHAT-01','Student','Ask course-scoped Study Chat a question','blocked','Would create chat history and possibly call the AI service; not exercised.'],
+['S-CRS-01','Student','Compare My Courses counts and progress to dashboard','partial','Learning summary reports 82 courses while /data/projects returns 74; visual page comparison unavailable.'],
+['S-DASH-01','Student','Check fresh student dashboard zero-state and stats','partial','Dashboard bundle uses learning-summary. Existing student is not fresh and has 82 enrollments; zero-state was not verified.'],
+['S-LIVE-01','Student','Open a live meeting without a valid session','blocked','Requires browser route and access-guard interaction.'],
+['S-LIVE-02','Student','Open AI notes for a completed session','blocked','Would invoke the AI notes endpoint; not exercised.'],
+['S-PERF-01','Student','Compare Performance Report figures across pages','fail','Live learning summary produced assessmentAverage 1000; admin KPI produced 53. Student fixture also has 82 enrollments.'],
+['S-PROF-01','Student','Verify profile enrolled-course count','partial','Existing account reports 82 enrollments and cannot stand in for the one-course scenario.'],
+['S-PROF-02','Student','Reject mismatched password confirmation','blocked','Would require submitting profile form.'],
+['S-PROF-03','Student','Change profile name and verify persistence','blocked','Would modify a real profile; not exercised.'],
+['S-QUIZ-01','Student','Block quiz generation when topic is blank','blocked','Requires interactive form validation.'],
+['S-QUIZ-02','Student','Repeat blank-topic validation on a fresh page','blocked','Requires interactive form validation.'],
+['S-QUIZ-03','Student','Generate and answer an AI quiz','fail','Current handler returns correct_answer (correct option index) and explanation in the public response. Quiz generation was not invoked.']
+];
+const tbody=document.getElementById('rows');
+function draw(){const q=document.getElementById('search').value.trim().toLowerCase(),f=document.getElementById('filter').value;const filtered=cases.filter(c=>(f==='all'||c[3]===f)&&c.join(' ').toLowerCase().includes(q));tbody.innerHTML=filtered.map(c=>`<tr><td class="id">${c[0]}</td><td>${c[1]}</td><td>${c[2]}</td><td><span class="badge ${c[3]}">${c[3]==='blocked'?'NOT RUN':c[3].toUpperCase()}</span></td><td class="evidence">${c[4]}</td></tr>`).join('');}
+// Keep data fields aligned as [id, role, scenario, status, evidence].
+document.getElementById('passCount').textContent=cases.filter(c=>c[3]==='pass').length;
+document.getElementById('failCount').textContent=cases.filter(c=>c[3]==='fail').length;
+document.getElementById('blockedCount').textContent=cases.filter(c=>c[3]==='blocked'||c[3]==='partial').length;
+document.getElementById('search').addEventListener('input',draw);document.getElementById('filter').addEventListener('change',draw);draw();
+</script>
+</body>
+</html>

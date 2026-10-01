@@ -229,7 +229,14 @@ router.get('/analytics/kpis', authenticate, requireRoles('instructor', 'admin'),
     const [learnersRes, enrollRes, gradeRes, liveRes] = await Promise.all([
       query('SELECT COUNT(DISTINCT student_id) as count FROM enrollments WHERE status = \'enrolled\''),
       query('SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE status = \'completed\') as completed FROM enrollments'),
-      query('SELECT COUNT(*) as taken, AVG(grading_score) as avg_score FROM submissions WHERE grading_score IS NOT NULL'),
+      query(`SELECT COUNT(*) as taken, AVG(grading_score) as avg_score
+             FROM submissions
+             WHERE kind = 'assessment'
+               AND grading_status IN ('auto_graded', 'graded')
+               AND grading_score IS NOT NULL
+               AND CASE WHEN jsonb_typeof(responses) = 'array'
+                        THEN jsonb_array_length(responses) > 0
+                        ELSE false END`),
       query('SELECT COUNT(*) as count FROM live_sessions')
     ]);
 

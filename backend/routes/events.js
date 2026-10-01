@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { query } from '../db/pool.js';
 import { authenticate, requireRoles } from '../middleware/auth.js';
+import { notifyEventCreated } from '../services/calendarNotifications.js';
 
 const router = Router();
 
@@ -17,7 +18,7 @@ function formatEvent(e) {
     startDate: e.starts_at,
     endDate: e.ends_at,
     date: e.starts_at,
-    type: e.type || 'custom',
+    type: e.event_type || 'custom',
     status: e.status,
     createdBy: e.created_by ? String(e.created_by) : null,
     createdAt: e.created_at,
@@ -100,6 +101,7 @@ async function createEventHandler(req, res, next) {
   try {
     const body = req.body || {};
     const { title, description, scope = 'global', courseId, endsAt } = body;
+    const eventType = scope === 'course' ? 'meeting' : 'custom';
     // Accept either an explicit startsAt or the client's { date, time } pair.
     let startsAt = body.startsAt || body.startDate || body.start;
     if (!startsAt && body.date) {
@@ -110,6 +112,12 @@ async function createEventHandler(req, res, next) {
     }
     if (!startsAt) {
       return res.status(400).json({ error: { code: 'INVALID_INPUT', message: 'A start date/time is required.' } });
+    }
+    if (!['global', 'course'].includes(scope)) {
+      return res.status(400).json({ error: { code: 'INVALID_INPUT', message: 'Audience must be global or course.' } });
+    }
+    if (scope === 'course' && !courseId) {
+      return res.status(400).json({ error: { code: 'INVALID_INPUT', message: 'Select a course for a course session.' } });
     }
 
     const start = new Date(startsAt);
@@ -128,16 +136,26 @@ async function createEventHandler(req, res, next) {
       [req.user.id, title.trim(), start]
     );
     if (dupe.rows.length > 0) {
+      try {
+        await notifyEventCreated(dupe.rows[0]);
+      } catch (notificationError) {
+        console.error('Could not create event notifications:', notificationError.message);
+      }
       return res.status(200).json(formatEvent(dupe.rows[0]));
     }
 
     const result = await query(
-      `INSERT INTO calendar_events (title, description, starts_at, ends_at, scope, course_id, created_by)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)
+      `INSERT INTO calendar_events (title, description, event_type, starts_at, ends_at, scope, course_id, created_by)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
        RETURNING *`,
-      [title.trim(), description || '', start, end, scope, scope === 'course' ? courseId : null, req.user.id]
+      [title.trim(), description || '', eventType, start, end, scope, scope === 'course' ? courseId : null, req.user.id]
     );
 
+    try {
+      await notifyEventCreated(result.rows[0]);
+    } catch (notificationError) {
+      console.error('Could not create event notifications:', notificationError.message);
+    }
     res.status(201).json(formatEvent(result.rows[0]));
   } catch (err) {
     next(err);
