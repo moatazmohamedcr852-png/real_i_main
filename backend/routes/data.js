@@ -334,9 +334,16 @@ router.post('/courses/:courseId/ai/chat', authenticate, chatHandler);
 router.post('/agent/chat/:courseId', authenticate, chatHandler);
 
 // DELETE /agent/session/:id
+// Only the session's owner (or an admin) may delete it. A session that does not exist and
+// one that belongs to someone else are indistinguishable to the caller (both 404).
 router.delete('/agent/session/:id', authenticate, async (req, res, next) => {
   try {
-    await query('DELETE FROM chat_sessions WHERE id = $1', [req.params.id]);
+    const result = req.user.role === 'admin'
+      ? await query('DELETE FROM chat_sessions WHERE id = $1', [req.params.id])
+      : await query('DELETE FROM chat_sessions WHERE id = $1 AND user_id = $2', [req.params.id, req.user.id]);
+    if (result.rowCount === 0) {
+      return res.status(404).json({ error: { code: 'SESSION_NOT_FOUND', message: 'Chat session not found.' } });
+    }
     res.json({ success: true });
   } catch (err) {
     next(err);
@@ -390,7 +397,7 @@ correctIndex is the 0-based integer index of the correct option. IMPORTANT: Rand
       quizQuestions = Array.isArray(parsed) ? parsed : (parsed.questions || Object.values(parsed)[0] || []);
       
       quizQuestions = quizQuestions.slice(0, numQ).map((q, i) => ({
-        id: q.id || `q-${i}`,
+        id: `q-${i}`, // server-assigned: model-supplied ids can collide
         question: q.question || 'Missing question?',
         options: Array.isArray(q.options) && q.options.length > 0 ? q.options : ['A', 'B', 'C', 'D'],
         correct_answer: q.correct_answer || (q.options ? q.options[q.correctIndex || 0] : 'A'),
@@ -402,23 +409,31 @@ correctIndex is the 0-based integer index of the correct option. IMPORTANT: Rand
       throw new Error('Failed to generate valid quiz format');
     }
 
-    // Return the correct_answer (as string index) and explanation to the browser so the UI can provide instant feedback.
+    // The browser gets only what it needs to render the question. The correct answer and
+    // the explanation (which gives it away) are revealed per question, after the student
+    // commits an answer, via POST /ai/quizzes/:quizId/questions/:questionId/check.
     const publicQuestions = quizQuestions.map((q) => ({
       id: q.id,
       question: q.question,
-      options: q.options,
-      correct_answer: String(q.correctIndex),
-      explanation: q.explanation
+      options: q.options
     }));
 
-    // Keep the answer key in an ephemeral server-side store, keyed by a quiz id the
-    // client can submit against. It is never returned to the browser.
-    const quizId = `aiq-${crypto.randomUUID().slice(0, 8)}`;
+    // Keep the answer key in an ephemeral server-side store, bound to the user who
+    // generated the quiz. It is never returned to the browser before an answer is locked.
+    const quizId = `aiq-${crypto.randomUUID()}`;
     aiQuizKeys.set(quizId, {
       createdAt: Date.now(),
+      userId: String(req.user.id),
       courseId,
       topic,
-      questions: quizQuestions.map((q) => ({ id: q.id, correctIndex: q.correctIndex }))
+      questions: quizQuestions.map((q) => ({
+        id: q.id,
+        correctIndex: Number(q.correctIndex),
+        optionCount: q.options.length,
+        explanation: q.explanation
+      })),
+      locked: new Map(), // questionId -> first selected index; later attempts cannot change it
+      result: null       // set on first grade; grading is final
     });
     pruneAiQuizKeys();
 
@@ -440,29 +455,71 @@ correctIndex is the 0-based integer index of the correct option. IMPORTANT: Rand
 router.post('/courses/:courseId/ai/quizzes', authenticate, generateQuizHandler);
 router.post('/agent/quiz/:courseId', authenticate, generateQuizHandler);
 
+// Look up an AI quiz key for the authenticated user. Another user's quiz and a missing or
+// expired one both return 404, so quiz ids cannot be probed.
+function getOwnedAiQuiz(req, res) {
+  const entry = aiQuizKeys.get(req.params.quizId);
+  if (!entry || entry.userId !== String(req.user.id)) {
+    res.status(404).json({ error: { code: 'QUIZ_NOT_FOUND', message: 'Quiz expired or not found; please generate a new one.' } });
+    return null;
+  }
+  return entry;
+}
+
+// POST /ai/quizzes/:quizId/questions/:questionId/check — lock in an answer and reveal the
+// result for that one question. The first answer wins: repeating the call returns the same
+// result for the original selection, so the key cannot be probed option by option.
+router.post('/ai/quizzes/:quizId/questions/:questionId/check', authenticate, (req, res, next) => {
+  try {
+    const entry = getOwnedAiQuiz(req, res);
+    if (!entry) return;
+    const q = entry.questions.find((item) => item.id === req.params.questionId);
+    if (!q) {
+      return res.status(404).json({ error: { code: 'QUESTION_NOT_FOUND', message: 'Question not found in this quiz.' } });
+    }
+    const selected = Number(req.body && req.body.selected);
+    if (!Number.isInteger(selected) || selected < 0 || selected >= q.optionCount) {
+      return res.status(400).json({ error: { code: 'INVALID_INPUT', message: 'selected must be a valid option index.' } });
+    }
+    if (!entry.locked.has(q.id)) entry.locked.set(q.id, selected);
+    const chosen = entry.locked.get(q.id);
+    res.json({
+      success: true,
+      questionId: q.id,
+      selected: chosen,
+      isCorrect: chosen === q.correctIndex,
+      correctIndex: String(q.correctIndex),
+      explanation: q.explanation
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // POST /ai/quizzes/:quizId/grade — server-side grading of an AI practice quiz.
 // Accepts { answers: { [questionId]: selectedIndex } } (or an array) and returns the
-// score without ever exposing the answer key to the client.
+// score. Answers already locked by /check take precedence over the body, and the first
+// grade is final, so repeated calls cannot be used to probe the answer key.
 router.post('/ai/quizzes/:quizId/grade', authenticate, async (req, res, next) => {
   try {
-    const entry = aiQuizKeys.get(req.params.quizId);
-    if (!entry) {
-      return res.status(404).json({ error: { code: 'QUIZ_NOT_FOUND', message: 'Quiz expired or not found; please generate a new one.' } });
+    const entry = getOwnedAiQuiz(req, res);
+    if (!entry) return;
+    if (!entry.result) {
+      const raw = (req.body && req.body.answers) || {};
+      const pick = (id) => (Array.isArray(raw) ? (raw.find((a) => (a.questionId || a.id) === id) || {}).value : raw[id]);
+
+      let correct = 0;
+      const detail = entry.questions.map((q) => {
+        const selected = entry.locked.has(q.id) ? entry.locked.get(q.id) : pick(q.id);
+        const isCorrect = selected !== undefined && selected !== null && Number(selected) === Number(q.correctIndex);
+        if (isCorrect) correct += 1;
+        return { id: q.id, isCorrect };
+      });
+      const total = entry.questions.length;
+      const percentage = total > 0 ? Math.round((correct / total) * 100) : 0;
+      entry.result = { correct, total, score: percentage, detail };
     }
-    const raw = (req.body && req.body.answers) || {};
-    const pick = (id) => (Array.isArray(raw) ? (raw.find((a) => (a.questionId || a.id) === id) || {}).value : raw[id]);
-
-    let correct = 0;
-    const detail = entry.questions.map((q) => {
-      const selected = pick(q.id);
-      const isCorrect = selected !== undefined && selected !== null && Number(selected) === Number(q.correctIndex);
-      if (isCorrect) correct += 1;
-      return { id: q.id, isCorrect };
-    });
-    const total = entry.questions.length;
-    const percentage = total > 0 ? Math.round((correct / total) * 100) : 0;
-
-    res.json({ success: true, quizId: req.params.quizId, correct, total, score: percentage, detail });
+    res.json({ success: true, quizId: req.params.quizId, ...entry.result });
   } catch (err) {
     next(err);
   }
@@ -497,8 +554,9 @@ router.get('/agent/quizzes/:id', authenticate, async (req, res, next) => {
 // POST /agent/quizzes/results
 router.post('/agent/quizzes/results', authenticate, async (req, res, next) => {
   try {
-    const { student_id, task_id, score, total, answers } = req.body || {};
-    const studentId = student_id || req.user.id;
+    // The subject is always the authenticated user; a client-supplied student_id is ignored.
+    const { task_id, score, total, answers } = req.body || {};
+    const studentId = req.user.id;
 
     const result = await query(
       `INSERT INTO quiz_results (student_id, task_id, score, total, answers)

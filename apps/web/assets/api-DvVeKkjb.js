@@ -296,6 +296,7 @@ export const getActiveGuidelines = (id) => r.get(`/agent/guidelines/active/${id}
 export const getAssignedQuizzes = (id) => r.get(`/agent/quizzes/${id}`).catch(() => []);
 export const submitQuizResult = (data) => r.post("/agent/quizzes/results", data);
 export const gradeAiQuiz = (quizId, answers) => r.post(`/ai/quizzes/${quizId}/grade`, { answers });
+export const checkAiQuizAnswer = (quizId, questionId, selected) => r.post(`/ai/quizzes/${quizId}/questions/${questionId}/check`, { selected });
 export const getCompletedQuizzes = (id) => r.get(`/agent/quizzes/completed/${id}`).catch(() => []);
 export const createTask = (req, sessionId = null) => r.post("/admin/task/create", { request: req, session_id: sessionId });
 export const adminHealthCheck = () => r.get("/health").catch(() => r.get("/admin/health"));
