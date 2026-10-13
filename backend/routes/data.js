@@ -604,8 +604,25 @@ router.post('/agent/quizzes/results', authenticate, async (req, res, next) => {
 });
 
 // GET /agent/quizzes/completed/:id
+// Students may read only their own results; admins may read anyone's; instructors may
+// read results of students enrolled in a course they teach. Anything else is a 403.
 router.get('/agent/quizzes/completed/:id', authenticate, async (req, res, next) => {
   try {
+    const targetId = String(req.params.id);
+    if (req.user.role !== 'admin' && targetId !== String(req.user.id)) {
+      let allowed = false;
+      if (req.user.role === 'instructor' && UUID_RE.test(targetId)) {
+        const taught = await query(
+          `SELECT 1 FROM enrollments e JOIN courses c ON c.id = e.course_id
+            WHERE e.student_id = $1 AND c.instructor_id = $2 LIMIT 1`,
+          [targetId, req.user.id]
+        );
+        allowed = taught.rows.length > 0;
+      }
+      if (!allowed) {
+        return res.status(403).json({ error: { code: 'FORBIDDEN', message: 'You can only view your own quiz results.' } });
+      }
+    }
     const results = await query(
       'SELECT task_id, score FROM quiz_results WHERE student_id = $1',
       [req.params.id]
