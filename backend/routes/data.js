@@ -2,6 +2,7 @@ import { Router } from 'express';
 import crypto from 'node:crypto';
 import { query } from '../db/pool.js';
 import { authenticate, requireRoles, allowAnonymous } from '../middleware/auth.js';
+import { publicAssessmentQuestions } from './assessments.js';
 
 const router = Router();
 
@@ -538,14 +539,43 @@ router.get('/agent/guidelines/active/:id', authenticate, async (req, res, next) 
   }
 });
 
-// GET /agent/quizzes/:id
+// GET /agent/quizzes/:id — published assessments for a course.
+// Same access rules as GET /assessments/:id: students must be enrolled, instructors must
+// own the assessment or the course, admins see all. Questions are returned without answers.
 router.get('/agent/quizzes/:id', authenticate, async (req, res, next) => {
   try {
+    const courseId = safeCourseId(req.params.id);
+    if (!courseId) return res.json([]);
+
+    if (req.user.role === 'student') {
+      const enrolled = await query(
+        "SELECT 1 FROM enrollments WHERE student_id = $1 AND course_id = $2 AND status IN ('enrolled', 'completed')",
+        [req.user.id, courseId]
+      );
+      if (enrolled.rows.length === 0) {
+        return res.status(403).json({ error: { code: 'FORBIDDEN', message: 'You are not enrolled in this course.' } });
+      }
+    }
+
+    const params = [courseId];
+    let ownerClause = '';
+    if (req.user.role === 'instructor') {
+      params.push(req.user.id);
+      ownerClause = ' AND (a.author_id = $2 OR c.instructor_id = $2)';
+    }
     const result = await query(
-      'SELECT id, title, time_limit_seconds, questions FROM assessments WHERE course_id = $1 AND status = \'published\'',
-      [req.params.id]
+      `SELECT a.id, a.title, a.time_limit_seconds, a.questions
+         FROM assessments a
+         LEFT JOIN courses c ON c.id = a.course_id
+        WHERE a.course_id = $1 AND a.status = 'published'${ownerClause}`,
+      params
     );
-    res.json(result.rows);
+    res.json(result.rows.map((row) => ({
+      id: row.id,
+      title: row.title,
+      time_limit_seconds: row.time_limit_seconds,
+      questions: publicAssessmentQuestions(row.questions)
+    })));
   } catch (err) {
     next(err);
   }

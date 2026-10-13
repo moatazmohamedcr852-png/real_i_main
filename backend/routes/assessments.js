@@ -81,6 +81,26 @@ function normalizeAssessmentResponses(questions, responses) {
   });
 }
 
+// The answer-free view of a question bank. Anything a student (or any client) receives
+// goes through here: answers, correct indexes and explanations are never included.
+function toPublicQuestions(normalizedQuestions) {
+  return normalizedQuestions.map((q) => ({
+    id: q.id,
+    text: q.prompt,
+    prompt: q.prompt,
+    type: q.type,
+    options: q.options || [],
+    marks: q.points || 1,
+    points: q.points || 1,
+    rubric: q.rubric || []
+  }));
+}
+
+export function publicAssessmentQuestions(rawQuestions) {
+  const parsed = typeof rawQuestions === 'string' ? JSON.parse(rawQuestions) : (rawQuestions || []);
+  return toPublicQuestions(normalizeAssessmentQuestions(parsed));
+}
+
 function formatAssessment(a) {
   const questions = normalizeAssessmentQuestions(typeof a.questions === 'string' ? JSON.parse(a.questions) : (a.questions || []));
   return {
@@ -104,16 +124,7 @@ function formatAssessment(a) {
     startDate: a.available_from,
     dueAt: a.due_at,
     endDate: a.due_at,
-    questions: questions.map((q) => ({
-      id: q.id,
-      text: q.prompt,
-      prompt: q.prompt,
-      type: q.type,
-      options: q.options || [],
-      marks: q.points || 1,
-      points: q.points || 1,
-      rubric: q.rubric || []
-    })),
+    questions: toPublicQuestions(questions),
     totalMarks: questions.reduce((acc, q) => acc + (q.points || 1), 0),
     passingGrade: 60,
     publishedAt: a.published_at,
